@@ -1,10 +1,8 @@
-// src/main/index.ts
-import { app, shell, BrowserWindow, ipcMain, BrowserView } from 'electron'
+import { app, BrowserWindow, ipcMain, BrowserView } from 'electron'
 import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { chromium } from 'playwright-core'
-// import OpenAI from 'openai' // Ensure you have this or use a generic fetch
+import { chromium, Page } from 'playwright-core'
 
 // 1. Enable Debugging Port for Playwright
 app.commandLine.appendSwitch('remote-debugging-port', '9222')
@@ -42,19 +40,16 @@ function createWindow(): void {
   // Initial Layout (Right 60% of the screen)
   const updateBounds = () => {
     const { width, height } = mainWindow.getBounds()
-    // Sidebar is roughly 400px or 40%, adjust as needed
     const sidebarWidth = 450
     view.setBounds({ x: sidebarWidth, y: 0, width: width - sidebarWidth, height: height })
   }
 
-  // Hook resize events to keep the split view correct
   mainWindow.on('resize', updateBounds)
   updateBounds()
 
-  // Load Wellfound initially or blank
+  // Load YC initially
   view.webContents.loadURL('https://www.workatastartup.com/companies')
 
-  // ... standard electron-vite loading code ...
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -64,160 +59,203 @@ function createWindow(): void {
 
 // --- AUTOMATION LOGIC ---
 
-// Helper: AI Generation (Mock or Real)
+// Helper: AI Generation (Mock)
 async function generateApplication(jobText: string, userProfile: string, apiKey: string) {
-  // If you have an OpenAI key:
-  /*
-  const openai = new OpenAI({ apiKey })
-  const completion = await openai.chat.completions.create({
-    messages: [{ role: 'user', content: `Write a short, casual cover letter application note for this job: ${jobText}. My details: ${userProfile}. Keep it under 50 words.` }],
-    model: 'gpt-4o',
-  })
-  return completion.choices[0].message.content
-  */
-
   // Mock return for testing
   return `Hi! I read your job description for ${jobText.slice(0, 20)}... and I think my skills in ${userProfile.slice(0, 20)}... are a great fit.`
 }
 
-// src/main/index.ts (Automation Section)
+// Helper: URL Cleaner
+function getFullUrl(partialUrl: string): string {
+  if (partialUrl.startsWith('http')) return partialUrl
+  return `https://www.workatastartup.com${partialUrl}`
+}
 
-ipcMain.handle('start-automation', async (event, { userProfile, apiKey }) => {
+// Global set to remember visited companies
+const visitedCompanies = new Set<string>()
+
+ipcMain.handle('start-automation', async () => {
   automationRunning = true
-  mainWindow.webContents.send('log', 'Connecting to browser...')
+  
+  const log = (msg: string, page?: Page) => {
+    const url = page ? page.url() : 'Init'
+    // Cleaner log format
+    const displayUrl = url.includes('workatastartup.com') 
+        ? url.split('workatastartup.com')[1] 
+        : 'External Site'
+    mainWindow.webContents.send('log', `[${displayUrl}] ${msg}`)
+  }
+
+  log('Connecting to browser...')
 
   try {
     const browser = await chromium.connectOverCDP('http://localhost:9222')
-    const defaultContext = browser.contexts()[0]
+    const contexts = browser.contexts()
+    const defaultContext = contexts[0]
 
-    // 1. Find the Main List Page
-    // NEW (Robust)
-    // We just want to make sure we are on the YC domain and have 'companies' in the URL.
-    // We don't care about the extra parameters.
-    let mainPage = defaultContext
-      .pages()
-      .find((p) => p.url().includes('workatastartup.com/companies'))
+    // 1. Identify the active page
+    let page = defaultContext.pages().find((p) => p.url().includes('workatastartup.com'))
+    if (!page) throw new Error('Please navigate to Work At A Startup first!')
 
-    if (!mainPage) {
-      // Fallback: If the user is on the root domain, they might be on the list too
-      mainPage = defaultContext.pages().find((p) => p.url().includes('workatastartup.com'))
-    }
-
-    if (!mainPage) throw new Error('Could not find YC tab. Please open workatastartup.com first!')
-    if (!mainPage) throw new Error('Please navigate to workatastartup.com/companies first!')
-
-    mainWindow.webContents.send('log', 'Found YC List. Starting loop...')
+    await page.bringToFront()
+    log('Starting Loop...', page)
 
     while (automationRunning) {
-      // --- STEP 1: SCAN FOR COMPANIES ---
-      // We look for company blocks. In YC, they are usually <div>s with a specific layout.
-      // A generic strategy for YC list: Look for the "View Company" links or the company name headers.
-      // Based on your recording, we are looking for the company links.
-
-      // We get all company links currently visible
-      const companyLinks = mainPage.locator('a[href^="/companies/"]:not([href*="jobs"])')
-      const count = await companyLinks.count()
-
-      mainWindow.webContents.send('log', `Found ${count} companies on screen.`)
-
-      for (let i = 0; i < count; i++) {
-        if (!automationRunning) break
-
-        // --- STEP 2: OPEN COMPANY PROFILE ---
-        // We must click and WAIT for the new tab (popup)
-        const [companyPage] = await Promise.all([
-          defaultContext.waitForEvent('page'), // Wait for new tab
-          companyLinks.nth(i).click({ modifiers: ['Meta'] }) // Ctrl/Cmd+Click forces new tab if not default
-        ])
-
-        await companyPage.waitForLoadState('domcontentloaded')
-        mainWindow.webContents.send('log', `Checking company...`)
-
-        // --- STEP 3: FIND JOBS IN COMPANY PROFILE ---
-        // Your recording shows: Click "Senior Backend..." -> Opens Page 2
-        // We accept "Engineering" or "Developer" roles. Adjust filter as needed.
-        const jobLinks = companyPage.locator('a', {
-          hasText: /Software|Engineer|Developer|Full Stack|Backend|Frontend/i
-        })
-
-        if ((await jobLinks.count()) > 0) {
-          // Just take the first matching job for now to keep it simple
-          const jobName = await jobLinks.first().innerText()
-          mainWindow.webContents.send('log', `Found job: ${jobName}`)
-
-          // Click Job and Wait for Application Page (Page 2)
-          // Note: Sometimes YC opens a modal, sometimes a new tab. Your script says new tab.
-          // We use a try/catch because sometimes it might stay on the same page.
-          try {
-            const [applicationPage] = await Promise.all([
-              defaultContext.waitForEvent('page', { timeout: 5000 }),
-              jobLinks.first().click()
-            ])
-
-            await applicationPage.waitForLoadState('domcontentloaded')
-
-            // --- STEP 4: APPLY ---
-            // We are now on the application page.
-            // 1. Click "Apply to..." button if it exists (sometimes it's direct)
-            const applyBtn = applicationPage.getByText('Apply', { exact: true }).first()
-            if (await applyBtn.isVisible()) {
-              await applyBtn.click()
-            }
-
-            // 2. Fill the Textbox
-            // Your recording used: getByRole('textbox', { name: 'Hi! My name...' })
-            // This is risky because the placeholder changes.
-            // BETTER SELECTOR: The main textarea usually has a specific type or is the only textarea.
-            const noteInput = applicationPage.locator('textarea')
-
-            if (await noteInput.isVisible()) {
-              // Generate AI Text
-              const jobDesc = await applicationPage.locator('body').innerText() // Simple grab of all text
-              const coverLetter = await generateApplication(jobDesc, userProfile, apiKey)
-
-              await noteInput.fill(coverLetter)
-              mainWindow.webContents.send('log', `Wrote application for ${jobName}`)
-
-              // 3. SUBMIT (Uncomment when ready)
-              // await applicationPage.getByRole('button', { name: 'Send Application' }).click()
-              mainWindow.webContents.send('log', `(Mock) Sent application!`)
-
-              await applicationPage.waitForTimeout(1000)
-            }
-
-            // Close the Job Page
-            await applicationPage.close()
-          } catch (err) {
-            // If no new page opened, maybe it was a modal or external link
-            mainWindow.webContents.send(
-              'log',
-              `Could not open application page: ${err instanceof Error ? err.message : String(err)}`
-            )
-          }
-        } else {
-          mainWindow.webContents.send('log', `No matching engineering jobs found here.`)
-        }
-
-        // Close the Company Page to clean up
-        await companyPage.close()
-
-        // Small pause between companies
-        await mainPage.waitForTimeout(1000)
+      // --- STEP 1: ENSURE WE ARE ON THE LIST ---
+      const isListUrl = page.url().includes('/companies') && !page.url().includes('/companies/')
+      
+      if (!isListUrl) {
+          log('Not on list page. Navigating...', page)
+          await page.goto('https://www.workatastartup.com/companies')
+          await page.waitForTimeout(2000)
       }
 
-      // --- STEP 5: SCROLL FOR MORE ---
-      mainWindow.webContents.send('log', 'Scrolling for more companies...')
-      await mainPage.mouse.wheel(0, 3000) // Scroll down heavily
-      await mainPage.waitForTimeout(3000) // Wait for lazy load
+      // Wait for list to load
+      try {
+        await page.waitForSelector('a[href^="/companies/"]', { timeout: 5000 })
+      } catch (e) {
+        log('Page empty? Reloading list...', page)
+        await page.reload()
+        await page.waitForSelector('a[href^="/companies/"]', { timeout: 10000 })
+      }
+
+      // --- STEP 2: SCRAPE LINKS ---
+      const companiesOnScreen = await page.evaluate(() => {
+        const anchors = Array.from(document.querySelectorAll('a[href^="/companies/"]'))
+        return (
+          anchors
+            .map((a) => a.getAttribute('href'))
+            .filter(
+              (href): href is string =>
+                href !== null && 
+                !href.includes('/jobs/') && 
+                !href.startsWith('http') && // Only take internal relative links
+                !href.includes('/website') && // --- FIX: Exclude website links
+                !href.includes('/twitter') &&
+                !href.includes('/linkedin')
+            )
+            .filter((value, index, self) => self.indexOf(value) === index)
+        )
+      })
+
+      const newCompanies = companiesOnScreen.filter((c) => !visitedCompanies.has(c))
+
+      log(`Found ${newCompanies.length} new companies.`, page)
+
+      if (newCompanies.length === 0) {
+        log('No new companies. Scrolling...', page)
+        await page.mouse.wheel(0, 3000)
+        await page.waitForTimeout(3000)
+        continue
+      }
+
+      // --- STEP 3: PROCESS EACH COMPANY ---
+      for (const relativeUrl of newCompanies) {
+        if (!automationRunning) break
+
+        visitedCompanies.add(relativeUrl)
+        
+        // Construct Company URL safely
+        const companyUrl = getFullUrl(relativeUrl)
+        log(`Checking: ${companyUrl}`, page)
+
+        // Navigate
+        await page.goto(companyUrl)
+        
+        try {
+            await page.waitForLoadState('domcontentloaded')
+            await page.waitForTimeout(1500) 
+        } catch(e) {
+            log('Timeout loading company, skipping.', page)
+            continue
+        }
+
+        // FIND ENGINEERING JOBS
+        // Sometimes jobs are 'a' tags with href containing /jobs/
+        const jobLinks = await page.locator('a[href*="/jobs/"]').all()
+        
+        if (jobLinks.length > 0) {
+          log(`Found ${jobLinks.length} jobs.`, page)
+
+          for (const jobLink of jobLinks) {
+            if (!automationRunning) break
+            const jobTitle = await jobLink.innerText()
+
+            if (jobTitle.match(/Software|Engineer|Developer|Backend|Frontend|Full Stack/i)) {
+              
+              const rawJobHref = await jobLink.getAttribute('href')
+              
+              if (rawJobHref) {
+                const fullJobUrl = getFullUrl(rawJobHref)
+                log(`>> Role: ${jobTitle}`, page)
+
+                // Navigate to Job
+                await page.goto(fullJobUrl)
+                await page.waitForTimeout(1500)
+
+                try {
+                  // CHECK: Already Applied?
+                  const appliedBtn = page.getByText('Applied', { exact: true })
+                  if ((await appliedBtn.count()) > 0) {
+                    log('Already applied.', page)
+                  } else {
+                    // APPLY FLOW
+                    const applyBtn = page.getByText('Apply', { exact: true }).first()
+                    if (await applyBtn.isVisible()) {
+                      await applyBtn.click()
+                      await page.waitForTimeout(500)
+                    }
+
+                    const textArea = page.locator('textarea').first()
+                    if (await textArea.isVisible()) {
+                      const coverLetter = `Hi! I am a software engineer... (AI for ${jobTitle})`
+                      await textArea.fill(coverLetter)
+                      log('Filled application.', page)
+                      
+                      // await page.getByRole('button', { name: 'Send Application' }).click()
+                      // await page.waitForTimeout(1000)
+                    }
+                  }
+                } catch (e: any) {
+                  log(`Skipping job: ${e.message}`, page)
+                }
+
+                // Go back to Company Page
+                await page.goBack()
+                await page.waitForTimeout(1000)
+              }
+            }
+          }
+        }
+
+        // --- STEP 4: RETURN TO LIST ---
+        log('Returning to list...', page)
+        await page.goBack()
+
+        // Verify we actually made it back
+        try {
+            await page.waitForSelector('a[href^="/companies/"]', { timeout: 3000 })
+        } catch (e) {
+            log('List failed to render. Forcing reload...', page)
+            await page.goto('https://www.workatastartup.com/companies')
+            await page.waitForLoadState('networkidle')
+        }
+        
+        await page.waitForTimeout(1000)
+      }
     }
 
-    browser.close()
-  } catch (error) {
+    // --- FIX: Disconnect safely ---
+    log('Automation stopped.')
+    try {
+        await browser.close() 
+    } catch (e) {
+        // Ignore disconnection errors
+    }
+
+  } catch (error: any) {
     console.error(error)
-    mainWindow.webContents.send(
-      'log',
-      `Error: ${error instanceof Error ? error.message : String(error)}`
-    )
+    mainWindow.webContents.send('log', `Error: ${error.message}`)
   }
 })
 
