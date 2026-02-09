@@ -74,7 +74,7 @@ function getFullUrl(partialUrl: string): string {
 // Global set to remember visited companies
 const visitedCompanies = new Set<string>()
 
-ipcMain.handle('start-automation', async () => {
+ipcMain.handle('start-automation', async (event, { userProfile, apiKey }) => {
   automationRunning = true
   
   const log = (msg: string, page?: Page) => {
@@ -209,7 +209,7 @@ ipcMain.handle('start-automation', async () => {
                     const textArea = page.locator('textarea').first()
                     if (await textArea.isVisible()) {
                       const coverLetter = `Hi! I am a software engineer... (AI for ${jobTitle})`
-                      await textArea.fill(coverLetter)
+                      await textArea.pressSequentially(coverLetter, { delay: 50 })
                       log('Filled application.', page)
                       
                       // await page.getByRole('button', { name: 'Send Application' }).click()
