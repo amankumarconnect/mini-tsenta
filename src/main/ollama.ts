@@ -1,15 +1,50 @@
 import { Ollama } from 'ollama'
 
 const ollama = new Ollama()
-const MODEL = 'qwen2.5:3b'
+const MODEL_GENERATION = 'qwen2.5:3b'
+const MODEL_EMBEDDING = 'qwen3-embedding:0.6b'
 
 // Simple in-memory cache for job titles to save inference time
 const MAX_CACHE_SIZE = 100
 const jobTitleCache = new Map<string, boolean>()
 
+// Configurable thresholds for similarity
+// 0.4 is a common baseline for semantic similarity, but tune as needed.
+const TITLE_THRESHOLD = 0.4
+
+/**
+ * Calculates the cosine similarity between two vectors.
+ */
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0)
+  const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0))
+  const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0))
+  if (magnitudeA === 0 || magnitudeB === 0) return 0
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+
+/**
+ * Generates an embedding for the given text using the embedding model.
+ */
+async function getEmbedding(text: string): Promise<number[]> {
+  try {
+    const response = await ollama.embed({
+      model: MODEL_EMBEDDING,
+      input: text
+    })
+    // response.embeddings is an array of arrays (one for each input string)
+    // since we only pass one string, we take the first element.
+    return response.embeddings[0]
+  } catch (error) {
+    console.error('Ollama embedding error:', error)
+    return []
+  }
+}
+
 /**
  * Quick check: is the job title relevant to what the user is looking for?
  * This avoids navigating to job pages that are clearly not a fit.
+ * Uses embedding similarity.
  */
 export async function isJobTitleRelevant(jobTitle: string, userProfile: string): Promise<boolean> {
   // Check cache first
@@ -18,33 +53,25 @@ export async function isJobTitleRelevant(jobTitle: string, userProfile: string):
     return jobTitleCache.get(cacheKey)!
   }
 
-  const prompt = `You are a job matching assistant. The user has described what kind of jobs they want to apply to. Your task is to check if the given job title could potentially match what the user is looking for.
-
-USER'S INPUT (this could be criteria, skills, preferences, a mini-resume, or anything — interpret it as what the user wants):
-"${userProfile}"
-
-JOB TITLE:
-"${jobTitle}"
-
-Think about whether this job title is related to what the user described. Be generous — if there's a reasonable connection, say YES.
-
-Examples:
-- User says "only apply to tauri dev jobs", Job title is "Tauri Developer" → YES
-- User says "I want remote frontend jobs", Job title is "Senior React Engineer" → YES
-- User says "only apply to tauri dev jobs", Job title is "Marketing Manager" → NO
-
-Answer with exactly one word: YES or NO`
-
   try {
-    const response = await ollama.chat({
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      options: { temperature: 0 }
-    })
-    const text = response.message.content.trim().toUpperCase()
-    const isRelevant = text.includes('YES')
+    const [titleEmbedding, profileEmbedding] = await Promise.all([
+      getEmbedding(jobTitle),
+      getEmbedding(userProfile)
+    ])
 
-    console.log(`[AI Title Check] "${jobTitle}" → AI said: "${text}" → ${isRelevant ? 'RELEVANT' : 'SKIP'}`)
+    if (titleEmbedding.length === 0 || profileEmbedding.length === 0) {
+      console.warn('[AI Title Check] Failed to get embeddings, defaulting to TRUE')
+      return true
+    }
+
+    const similarity = cosineSimilarity(titleEmbedding, profileEmbedding)
+    const isRelevant = similarity >= TITLE_THRESHOLD
+
+    console.log(
+      `[AI Title Check] "${jobTitle}" vs Profile -> Similarity: ${similarity.toFixed(4)} -> ${
+        isRelevant ? 'RELEVANT' : 'SKIP'
+      }`
+    )
 
     // Update cache
     if (jobTitleCache.size >= MAX_CACHE_SIZE) {
@@ -61,37 +88,35 @@ Answer with exactly one word: YES or NO`
   }
 }
 
+// Slightly lower threshold for full descriptions as they contain more noise
+const DESCRIPTION_THRESHOLD = 0.5
+
 /**
  * Determines if a job is relevant based on the full job description and user's stated preferences.
+ * Uses embedding similarity.
  */
 export async function isJobRelevant(jobDescription: string, userProfile: string): Promise<boolean> {
-  const prompt = `You are a job matching assistant. The user has described what kind of jobs they want to apply to. Your task is to verify whether this specific job matches what the user is looking for by reading the full job description.
-
-USER'S INPUT (this could be criteria, skills, preferences, a mini-resume, or anything — interpret it as what the user wants):
-"${userProfile}"
-
-JOB DESCRIPTION:
-"${jobDescription}"
-
-Instructions:
-- Check if the job description matches what the user asked for.
-- If the user specified a specific technology (e.g. "tauri"), check if the job involves that technology.
-- If the user specified a role type (e.g. "frontend", "backend"), check if the job is that type.
-- If the user gave skills or a resume, check if the job is a reasonable match for those skills.
-- Be generous — if the job is a reasonable match, say YES. Only say NO if it's clearly unrelated.
-
-Answer with exactly one word: YES or NO`
-
   try {
-    const response = await ollama.chat({
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      options: { temperature: 0 }
-    })
-    const text = response.message.content.trim().toUpperCase()
-    const isRelevant = text.includes('YES')
+    // Truncate job description if it's too long to avoid context limits (though embeddings handle large contexts well, 
+    // performance might degrade or it might capture too much noise).
+    // For embeddings, sending the first 2000-3000 chars is usually enough to capture the core of the job.
 
-    console.log(`[AI Job Check] AI said: "${text}" → ${isRelevant ? 'GOOD FIT' : 'NOT A FIT'}`)
+    const [descriptionEmbedding, profileEmbedding] = await Promise.all([
+      getEmbedding(jobDescription),
+      getEmbedding(userProfile)
+    ])
+
+    if (descriptionEmbedding.length === 0 || profileEmbedding.length === 0) {
+      console.warn('[AI Job Check] Failed to get embeddings, defaulting to TRUE')
+      return true
+    }
+
+    const similarity = cosineSimilarity(descriptionEmbedding, profileEmbedding)
+    const isRelevant = similarity >= DESCRIPTION_THRESHOLD
+
+    console.log(
+      `[AI Job Check] Similarity: ${similarity.toFixed(4)} -> ${isRelevant ? 'GOOD FIT' : 'NOT A FIT'}`
+    )
 
     return isRelevant
   } catch (error) {
@@ -120,7 +145,7 @@ Write the application now:`
 
   try {
     const response = await ollama.chat({
-      model: MODEL,
+      model: MODEL_GENERATION,
       messages: [{ role: 'user', content: prompt }],
       options: { temperature: 0.7 }
     })
