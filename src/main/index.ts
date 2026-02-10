@@ -175,70 +175,66 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
           for (const jobLink of jobLinks) {
             if (!automationRunning) break
             const jobTitle = await jobLink.innerText()
+            const rawJobHref = await jobLink.getAttribute('href')
 
-            if (jobTitle.match(/Software|Engineer|Developer|Backend|Frontend|Full Stack/i)) {
-              
-              const rawJobHref = await jobLink.getAttribute('href')
-              
-              if (rawJobHref) {
-                const fullJobUrl = getFullUrl(rawJobHref)
-                log(`>> Role: ${jobTitle}`, page)
+            if (rawJobHref) {
+              const fullJobUrl = getFullUrl(rawJobHref)
+              log(`>> Role: ${jobTitle}`, page)
 
-                // Navigate to Job
-                await page.goto(fullJobUrl)
-                await page.waitForTimeout(1500)
+              // Navigate to Job
+              await page.goto(fullJobUrl)
+              await page.waitForTimeout(1500)
 
-                try {
-                  // CHECK: Already Applied?
-                  const appliedBtn = page.getByText('Applied', { exact: true })
-                  if ((await appliedBtn.count()) > 0) {
-                    log('Already applied.', page)
+              try {
+                // CHECK: Already Applied?
+                const appliedBtn = page.getByText('Applied', { exact: true })
+                if ((await appliedBtn.count()) > 0) {
+                  log('Already applied.', page)
+                } else {
+                  // GET JOB DESCRIPTION TEXT
+                  const jobDescriptionText = await page.evaluate(() => {
+                    // Try to get the main job description content
+                    const content = document.querySelector('main') || document.body
+                    return content.innerText
+                  })
+
+                  // AI: CHECK IF JOB IS RELEVANT
+                  log('🤖 AI analyzing job fit...', page)
+                  const isRelevant = await isJobRelevant(jobDescriptionText, userProfile)
+
+                  if (!isRelevant) {
+                    log('❌ AI: Job not a good fit, skipping.', page)
                   } else {
-                    // GET JOB DESCRIPTION TEXT
-                    const jobDescriptionText = await page.evaluate(() => {
-                      // Try to get the main job description content
-                      const content = document.querySelector('main') || document.body
-                      return content.innerText
-                    })
+                    log('✅ AI: Job is a good fit! Generating application...', page)
 
-                    // AI: CHECK IF JOB IS RELEVANT
-                    log('🤖 AI analyzing job fit...', page)
-                    const isRelevant = await isJobRelevant(jobDescriptionText, userProfile)
+                    // APPLY FLOW
+                    const applyBtn = page.getByText('Apply', { exact: true }).first()
+                    if (await applyBtn.isVisible()) {
+                      await applyBtn.click()
+                      await page.waitForTimeout(500)
+                    }
 
-                    if (!isRelevant) {
-                      log('❌ AI: Job not a good fit, skipping.', page)
-                    } else {
-                      log('✅ AI: Job is a good fit! Generating application...', page)
+                    const textArea = page.locator('textarea').first()
+                    if (await textArea.isVisible()) {
+                      // AI: GENERATE APPLICATION
+                      const coverLetter = await generateApplication(jobDescriptionText, userProfile)
+                      log('📝 Typing application...', page)
+                      await textArea.pressSequentially(coverLetter, { delay: 30 })
+                      log('✅ Application filled! (Not submitted - testing mode)', page)
 
-                      // APPLY FLOW
-                      const applyBtn = page.getByText('Apply', { exact: true }).first()
-                      if (await applyBtn.isVisible()) {
-                        await applyBtn.click()
-                        await page.waitForTimeout(500)
-                      }
-
-                      const textArea = page.locator('textarea').first()
-                      if (await textArea.isVisible()) {
-                        // AI: GENERATE APPLICATION
-                        const coverLetter = await generateApplication(jobDescriptionText, userProfile)
-                        log('📝 Typing application...', page)
-                        await textArea.pressSequentially(coverLetter, { delay: 30 })
-                        log('✅ Application filled! (Not submitted - testing mode)', page)
-                        
-                        // NOT SUBMITTING - Testing mode
-                        // await page.getByRole('button', { name: 'Send Application' }).click()
-                        // await page.waitForTimeout(1000)
-                      }
+                      // NOT SUBMITTING - Testing mode
+                      // await page.getByRole('button', { name: 'Send Application' }).click()
+                      // await page.waitForTimeout(1000)
                     }
                   }
-                } catch (e: any) {
-                  log(`Skipping job: ${e.message}`, page)
                 }
-
-                // Go back to Company Page
-                await page.goBack()
-                await page.waitForTimeout(1000)
+              } catch (e: any) {
+                log(`Skipping job: ${e.message}`, page)
               }
+
+              // Go back to Company Page
+              await page.goBack()
+              await page.waitForTimeout(1000)
             }
           }
         }
