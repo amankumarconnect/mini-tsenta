@@ -198,7 +198,7 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
                     const jobDescriptionText = await page.evaluate(() => {
                       // Try to get the main job description content
                       const content = document.querySelector('main') || document.body
-                      return content.innerText.slice(0, 3000) // Limit to 3000 chars for API
+                      return content.innerText
                     })
 
                     // AI: CHECK IF JOB IS RELEVANT
