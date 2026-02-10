@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, JSX } from 'react'
 import { Button } from './components/ui/button'
 import { Textarea } from './components/ui/textarea'
-import { ScrollArea } from './components/ui/scroll-area'
+
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 
 function App(): JSX.Element {
@@ -67,7 +67,7 @@ function App(): JSX.Element {
           <p className="text-sm text-muted-foreground">Automated WorkAtAStartup Applier</p>
         </header>
 
-        <Card>
+        <Card className="flex-shrink-0">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Your Profile</CardTitle>
             <input
@@ -95,14 +95,14 @@ function App(): JSX.Element {
 • Salary expectations (e.g., $100k-150k, open)
 • Location preference (e.g., Remote, SF Bay Area)
 • Any other relevant info..."
-              className="min-h-[200px]"
+              className="min-h-[150px] max-h-[300px] overflow-y-auto"
               value={profile}
               onChange={(e) => setProfile(e.target.value)}
             />
           </CardContent>
         </Card>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           {!isRunning ? (
             <Button className="w-full" onClick={handleStart} disabled={!profile}>
               Start Applying
@@ -114,17 +114,18 @@ function App(): JSX.Element {
           )}
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col">
-          <h3 className="text-sm font-semibold mb-2">Activity Log</h3>
-          <ScrollArea className="flex-1 bg-muted/50 rounded-md border p-2">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <h3 className="text-sm font-semibold mb-2 flex-shrink-0">Activity Log</h3>
+          <div className="flex-1 overflow-y-auto bg-muted/50 rounded-md border p-2">
             <div className="space-y-1">
               {logs.map((log, i) => (
-                <div key={i} className="text-xs font-mono text-muted-foreground">
+                <div key={i} className="text-xs font-mono text-muted-foreground break-all">
                   {log}
                 </div>
               ))}
             </div>
-          </ScrollArea>
+            {/* Auto-scroll anchor could be added here if needed */}
+          </div>
         </div>
       </div>
     </div>
