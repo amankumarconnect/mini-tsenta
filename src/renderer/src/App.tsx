@@ -10,6 +10,11 @@ function App(): JSX.Element {
   const [isRunning, setIsRunning] = useState(false)
   const [isParsing, setIsParsing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const logsEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [logs])
 
   useEffect(() => {
     // Listen for logs from Main process
@@ -124,7 +129,7 @@ function App(): JSX.Element {
                 </div>
               ))}
             </div>
-            {/* Auto-scroll anchor could be added here if needed */}
+            <div ref={logsEndRef} />
           </div>
         </div>
       </div>
