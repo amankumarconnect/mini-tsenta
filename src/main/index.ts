@@ -306,8 +306,11 @@ ipcMain.handle('start-automation', async () => {
                       jobDescriptionText,
                       userProfile.text
                     )
-                    log('Typing application...', { jobTitle })
-                    await textArea.pressSequentially(coverLetter, { delay: 30 })
+                    log(`Typing application (${coverLetter.length} chars)...`, { jobTitle })
+                    
+                    // Typing faster (10ms) and allowing more time (60s) to avoid timeouts
+                    await textArea.pressSequentially(coverLetter, { delay: 10, timeout: 60000 })
+                    
                     log('Application filled! (Not submitted - testing mode)', {
                       type: 'success',
                       jobTitle
