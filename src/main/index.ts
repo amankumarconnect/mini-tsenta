@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { chromium, Page } from 'playwright-core'
-import { isJobTitleRelevant, isJobRelevant, generateApplication, getEmbedding } from './ollama'
+import { isJobTitleRelevant, isJobRelevant, generateApplication, getEmbedding, generateJobPersona } from './ollama'
 import { PDFParse } from 'pdf-parse'
 import { writeFileSync, readFileSync, existsSync } from 'fs'
 
@@ -391,7 +391,16 @@ ipcMain.handle('parse-resume', async (_event, buffer: ArrayBuffer) => {
 
 ipcMain.handle('save-user-profile', async (_event, text: string) => {
   try {
-    const embedding = await getEmbedding(text)
+    // 1. Generate the "Target Job Persona" from the resume
+    console.log('Generating Target Job Persona from resume...')
+    const persona = await generateJobPersona(text)
+    console.log('Generated Persona:', persona)
+
+    // 2. Generate embedding from the PERSONA (not the raw resume)
+    console.log('Generating embedding from persona...')
+    const embedding = await getEmbedding(persona)
+
+    // 3. Save the ORIGINAL text (for cover letters) and the NEW embedding
     userProfile = { text, embedding }
     writeFileSync(userDataPath, JSON.stringify(userProfile))
     return true

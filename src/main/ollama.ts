@@ -10,7 +10,7 @@ const jobTitleCache = new Map<string, { relevant: boolean; score: number }>()
 
 // Configurable thresholds for similarity
 // 0.4 is a common baseline for semantic similarity, but tune as needed.
-const TITLE_THRESHOLD = 0.4
+const TITLE_THRESHOLD = 0.45
 
 /**
  * Calculates the cosine similarity between two vectors.
@@ -91,7 +91,7 @@ export async function isJobTitleRelevant(
 }
 
 // Slightly lower threshold for full descriptions as they contain more noise
-const DESCRIPTION_THRESHOLD = 0.5
+const DESCRIPTION_THRESHOLD = 0.45
 
 /**
  * Determines if a job is relevant based on the full job description and user's stated preferences.
@@ -154,5 +154,51 @@ Write the application now:`
   } catch (error) {
     console.error('Ollama generateApplication error:', error)
     return `Hi! I'm interested in this role. Based on my experience and skills, I believe I would be a great fit for your team.`
+  }
+}
+
+/**
+ * Generates a "Target Job Persona" from the resume text using an LLM.
+ * This persona is used to generate a better embedding for job matching.
+ */
+export async function generateJobPersona(resumeText: string): Promise<string> {
+  const prompt = `### ROLE
+You are an expert Technical Recruiter and Search Engine Optimization (SEO) specialist.
+
+### TASK
+I will provide you with a candidate's RESUME text.
+Your goal is to generate a **"Target Job Persona"** paragraph. This text will be converted into a vector embedding to find the perfect job match for this candidate.
+
+### INSTRUCTIONS
+1. **Analyze the Resume:** Identify the candidate's *actual* seniority level (Student, Intern, Junior, Mid-level, Senior) based on their graduation year and work history.
+    - If they are a student or graduating in the future (e.g., 2026, 2027, 2028), you MUST classify them as **Intern** or **Trainee**.
+    - If they have 0-2 years experience, classify as **Junior** or **Entry-Level**.
+    - Do NOT use titles like "Architect", "Lead", or "Manager" unless they have 5+ years of professional experience.
+
+2. **Extract Key Skills:** List their top 5-7 hard technical skills (e.g., Python, React, AWS).
+
+3. **Generate the Persona:** Write a hypothetical **Job Description** that this candidate would be 100% qualified for. 
+    - Use the first person ("I am looking for...").
+    - Heavily emphasize the seniority level keywords (e.g., "Seeking an Internship", "Entry-level position").
+    - Include the specific tech stack.
+    - If the resume mentions specific locations (like "India"), include that constraint.
+
+### CONSTRAINT
+- Output **ONLY** the generated paragraph. Do not include introductory text or explanations.
+- The paragraph should be dense with keywords relevant to the *target* job, not just the resume history.
+
+### INPUT RESUME
+${resumeText}`
+
+  try {
+    const response = await ollama.chat({
+      model: MODEL_GENERATION,
+      messages: [{ role: 'user', content: prompt }],
+      options: { temperature: 0.3 }
+    })
+    return response.message.content.trim()
+  } catch (error) {
+    console.error('Ollama generateJobPersona error:', error)
+    return resumeText // Fallback to original text
   }
 }
