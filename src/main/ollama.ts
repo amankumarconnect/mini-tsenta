@@ -163,29 +163,33 @@ Write the application now:`
  */
 export async function generateJobPersona(resumeText: string): Promise<string> {
   const prompt = `### ROLE
-You are an expert Technical Recruiter and Search Engine Optimization (SEO) specialist.
+You are an expert Career Coach and Technical Recruiter with 20+ years of experience in matching candidates to their ideal roles.
 
 ### TASK
-I will provide you with a candidate's RESUME text.
-Your goal is to generate a **"Target Job Persona"** paragraph. This text will be converted into a vector embedding to find the perfect job match for this candidate.
+I will provide you with a candidate's RESUME.
+Your goal is to write a **Hypothetical Job Description** that represents the **perfect, realistic next step** for this specific candidate. This text will be vector-embedded to search for matching jobs.
 
-### INSTRUCTIONS
-1. **Analyze the Resume:** Identify the candidate's *actual* seniority level (Student, Intern, Junior, Mid-level, Senior) based on their graduation year and work history.
-    - If they are a student or graduating in the future (e.g., 2026, 2027, 2028), you MUST classify them as **Intern** or **Trainee**.
-    - If they have 0-2 years experience, classify as **Junior** or **Entry-Level**.
-    - Do NOT use titles like "Architect", "Lead", or "Manager" unless they have 5+ years of professional experience.
+### CRITICAL INSTRUCTIONS (Follow in Order)
 
-2. **Extract Key Skills:** List their top 5-7 hard technical skills (e.g., Python, React, AWS).
+1. **Analyze Seniority (The Filter):**
+   - **Student/Fresher:** If Education ends in the future (e.g., 2026+) OR experience is < 1 year, the target role **MUST** be "Intern", "Trainee", or "Entry-Level".
+   - **Junior/Mid:** If experience is 1-4 years, the target role is "Developer", "Associate", or "Engineer".
+   - **Senior/Lead:** If experience is 5+ years, the target role is "Senior", "Lead", or "Manager".
+   - **Pivot:** If the candidate's recent projects/degrees differ from their past work history, prioritize the **NEW** skills (e.g., a Sales Manager pivoting to Data Science).
 
-3. **Generate the Persona:** Write a hypothetical **Job Description** that this candidate would be 100% qualified for. 
-    - Use the first person ("I am looking for...").
-    - Heavily emphasize the seniority level keywords (e.g., "Seeking an Internship", "Entry-level position").
-    - Include the specific tech stack.
-    - If the resume mentions specific locations (like "India"), include that constraint.
+2. **Extract the "Power Keywords":**
+   - Identify the top 3-5 hard skills they *actually* used in projects/work (not just listed in a "Skills" section).
+   - Identify their domain focus (e.g., "Fintech", "Healthtech", "E-commerce") if apparent.
 
-### CONSTRAINT
-- Output **ONLY** the generated paragraph. Do not include introductory text or explanations.
-- The paragraph should be dense with keywords relevant to the *target* job, not just the resume history.
+3. **Draft the Target Job Description:**
+   - Write it from the employer's perspective ("We are looking for...").
+   - Use standard industry terminology.
+   - **Crucial:** Include constraints that match the user's resume (e.g., "Remote", "India", "Visa Sponsorship" if mentioned, or specific certifications).
+
+### OUTPUT FORMAT
+Return **ONLY** the hypothetical Job Description paragraph. Do not output your thinking process or JSON. Just the text to be embedded.
+
+---
 
 ### INPUT RESUME
 ${resumeText}`
