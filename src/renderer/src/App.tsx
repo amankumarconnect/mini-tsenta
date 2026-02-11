@@ -8,6 +8,7 @@ function App(): JSX.Element {
   const [hasResume, setHasResume] = useState(false)
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [isRunning, setIsRunning] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [isParsing, setIsParsing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [editMode, setEditMode] = useState(false)
@@ -48,6 +49,7 @@ function App(): JSX.Element {
 
   const handleStart = (): void => {
     setIsRunning(true)
+    setIsPaused(false)
     // @ts-ignore (Assuming window.api exists from preload)
     window.api.startAutomation()
   }
@@ -72,10 +74,18 @@ function App(): JSX.Element {
     }
   }
 
-  const handleStop = (): void => {
-    setIsRunning(false)
-    // @ts-ignore (Assuming window.api exists from preload)
-    window.api.stopAutomation()
+  const handleTogglePause = (): void => {
+    if (isPaused) {
+      // Resume
+      // @ts-ignore (exposed by preload)
+      window.api.resumeAutomation()
+      setIsPaused(false)
+    } else {
+      // Pause
+      // @ts-ignore (exposed by preload)
+      window.api.pauseAutomation()
+      setIsPaused(true)
+    }
   }
 
   return (
@@ -99,8 +109,9 @@ function App(): JSX.Element {
             hasResume={hasResume}
             onEdit={() => setEditMode(true)}
             isRunning={isRunning}
+            isPaused={isPaused}
             onStart={handleStart}
-            onStop={handleStop}
+            onTogglePause={handleTogglePause}
           />
         )}
 

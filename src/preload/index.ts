@@ -10,6 +10,8 @@ interface LogEntry {
 contextBridge.exposeInMainWorld('api', {
   startAutomation: (data: { userProfile: string }) => ipcRenderer.invoke('start-automation', data),
   stopAutomation: () => ipcRenderer.send('stop-automation'),
+  pauseAutomation: () => ipcRenderer.send('pause-automation'),
+  resumeAutomation: () => ipcRenderer.send('resume-automation'),
   saveResume: (buffer: ArrayBuffer) => ipcRenderer.invoke('save-resume', buffer),
   downloadResume: () => ipcRenderer.invoke('download-resume'),
   onLog: (callback: (msg: LogEntry) => void) => {

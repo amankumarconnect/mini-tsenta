@@ -9,16 +9,18 @@ interface ProfileReadViewProps {
   hasResume: boolean
   onEdit: () => void
   isRunning: boolean
+  isPaused: boolean
   onStart: () => void
-  onStop: () => void
+  onTogglePause: () => void
 }
 
 export function ProfileReadView({
   hasResume,
   onEdit,
   isRunning,
+  isPaused,
   onStart,
-  onStop
+  onTogglePause
 }: ProfileReadViewProps): JSX.Element {
   const handleDownload = async (): Promise<void> => {
     // @ts-ignore (exposed by preload)
@@ -53,8 +55,12 @@ export function ProfileReadView({
           Start Applying
         </Button>
       ) : (
-        <Button variant="destructive" className="w-full" onClick={onStop}>
-          Stop
+        <Button
+          variant={isPaused ? 'default' : 'secondary'}
+          className="w-full"
+          onClick={onTogglePause}
+        >
+          {isPaused ? 'Continue Applying' : 'Pause Applying'}
         </Button>
       )}
     </div>

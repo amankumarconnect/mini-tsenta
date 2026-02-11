@@ -19,6 +19,7 @@ app.commandLine.appendSwitch('remote-debugging-port', '9222')
 let mainWindow: BrowserWindow
 let view: BrowserView
 let automationRunning = false
+let isPaused = false
 
 interface UserData {
   text: string
@@ -144,6 +145,13 @@ ipcMain.handle('start-automation', async () => {
 
     while (automationRunning) {
       // --- STEP 1: ENSURE WE ARE ON THE LIST ---
+      while (isPaused && automationRunning) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        // If we stopped while paused, break out
+        if (!automationRunning) break
+      }
+      if (!automationRunning) break
+
       const isListUrl = page.url().includes('/companies') && !page.url().includes('/companies/')
 
       if (!isListUrl) {
@@ -191,6 +199,10 @@ ipcMain.handle('start-automation', async () => {
 
       // --- STEP 3: PROCESS EACH COMPANY ---
       for (const relativeUrl of newCompanies) {
+        // PAUSE CHECK
+        while (isPaused && automationRunning) {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+        }
         if (!automationRunning) break
 
         visitedCompanies.add(relativeUrl)
@@ -226,6 +238,10 @@ ipcMain.handle('start-automation', async () => {
           log(`Found ${jobLinks.length} job(s) at this company.`)
 
           for (const jobLink of jobLinks) {
+            // PAUSE CHECK
+            while (isPaused && automationRunning) {
+              await new Promise((resolve) => setTimeout(resolve, 500))
+            }
             if (!automationRunning) break
 
             // Scroll to the job link so the user can see it in the BrowserView
@@ -379,6 +395,7 @@ ipcMain.handle('start-automation', async () => {
 
 ipcMain.on('stop-automation', () => {
   automationRunning = false
+  isPaused = false
   mainWindow.webContents.send('log', {
     message: 'Stopping automation and closing app...',
     type: 'info'
@@ -386,6 +403,26 @@ ipcMain.on('stop-automation', () => {
   setTimeout(() => {
     app.quit()
   }, 1000)
+})
+
+ipcMain.on('pause-automation', () => {
+  if (automationRunning) {
+    isPaused = true
+    mainWindow.webContents.send('log', {
+      message: 'Automation PAUSED. Click "Continue" to resume.',
+      type: 'info'
+    })
+  }
+})
+
+ipcMain.on('resume-automation', () => {
+  if (automationRunning && isPaused) {
+    isPaused = false
+    mainWindow.webContents.send('log', {
+      message: 'Automation RESUMED.',
+      type: 'info'
+    })
+  }
 })
 
 ipcMain.handle('save-resume', async (_event, buffer: ArrayBuffer) => {
