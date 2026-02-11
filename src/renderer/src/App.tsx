@@ -9,8 +9,31 @@ function App(): JSX.Element {
   const [logs, setLogs] = useState<string[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [isParsing, setIsParsing] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [editMode, setEditMode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Load existing profile
+    const loadProfile = async (): Promise<void> => {
+      try {
+        // @ts-ignore
+        const savedProfile = await window.api.getUserProfile()
+        if (savedProfile) {
+          setProfile(savedProfile)
+        } else {
+          setEditMode(true) // No profile, go to edit mode
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error)
+        setEditMode(true)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadProfile()
+  }, [])
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -27,7 +50,19 @@ function App(): JSX.Element {
   const handleStart = (): void => {
     setIsRunning(true)
     // @ts-ignore (Assuming window.api exists from preload)
-    window.api.startAutomation({ userProfile: profile })
+    window.api.startAutomation()
+  }
+
+  const handleSave = async (): Promise<void> => {
+    try {
+      // @ts-ignore
+      await window.api.saveUserProfile(profile)
+      setEditMode(false)
+      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Profile saved!`])
+    } catch (error) {
+      console.error('Failed to save profile:', error)
+      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Error saving profile`])
+    }
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
@@ -45,6 +80,14 @@ function App(): JSX.Element {
       setLogs((prev) => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] Resume parsed successfully!`
+      ])
+      // Auto-save after parse
+      // @ts-ignore
+      await window.api.saveUserProfile(text)
+      setEditMode(false)
+      setLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] Profile saved automatically!`
       ])
     } catch (error) {
       console.error(error)
@@ -72,52 +115,80 @@ function App(): JSX.Element {
           <p className="text-sm text-muted-foreground">Automated WorkAtAStartup Applier</p>
         </header>
 
-        <Card className="flex-shrink-0">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Your Profile</CardTitle>
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept=".pdf"
-              onChange={handleFileUpload}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isParsing || isRunning}
-            >
-              {isParsing ? 'Parsing...' : 'Upload PDF Resume'}
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Textarea
-              placeholder="Describe yourself in a paragraph. Include:
-• Skills (e.g., React, Node.js, Python, ML)
-• Preferred role (e.g., Full Stack, Backend, Frontend)
-• Years of experience
-• Salary expectations (e.g., $100k-150k, open)
-• Location preference (e.g., Remote, SF Bay Area)
-• Any other relevant info..."
-              className="min-h-[150px] max-h-[300px] overflow-y-auto"
-              value={profile}
-              onChange={(e) => setProfile(e.target.value)}
-            />
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          <div className="text-center text-sm text-muted-foreground">Loading profile...</div>
+        ) : editMode ? (
+          <>
+            <Card className="flex-shrink-0">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Your Profile</CardTitle>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".pdf"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isParsing || isRunning}
+                >
+                  {isParsing ? 'Parsing...' : 'Upload PDF Resume'}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Textarea
+                  placeholder="Describe yourself..."
+                  className="min-h-[150px] max-h-[300px] overflow-y-auto"
+                  value={profile}
+                  onChange={(e) => setProfile(e.target.value)}
+                />
+                <Button className="w-full" onClick={handleSave} disabled={!profile}>
+                  Save Profile
+                </Button>
+                {/* Allow canceling if we already have a profile loaded (though state logic implies we only edit if needed, let's keep it simple) */}
+                {profile && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => setEditMode(false)}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <div className="space-y-4">
+            <Card className="flex-shrink-0">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm">Ready to Apply</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setEditMode(true)}>
+                  Edit
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xs text-muted-foreground line-clamp-6 whitespace-pre-wrap">
+                  {profile}
+                </div>
+              </CardContent>
+            </Card>
 
-        <div className="flex gap-2 flex-shrink-0">
-          {!isRunning ? (
-            <Button className="w-full" onClick={handleStart} disabled={!profile}>
-              Start Applying
-            </Button>
-          ) : (
-            <Button variant="destructive" className="w-full" onClick={handleStop}>
-              Stop
-            </Button>
-          )}
-        </div>
+            {!isRunning ? (
+              <Button className="w-full" onClick={handleStart}>
+                Start Applying
+              </Button>
+            ) : (
+              <Button variant="destructive" className="w-full" onClick={handleStop}>
+                Stop
+              </Button>
+            )}
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <h3 className="text-sm font-semibold mb-2 flex-shrink-0">Activity Log</h3>

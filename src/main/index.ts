@@ -3,8 +3,9 @@ import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { chromium, Page } from 'playwright-core'
-import { isJobTitleRelevant, isJobRelevant, generateApplication } from './ollama'
+import { isJobTitleRelevant, isJobRelevant, generateApplication, getEmbedding } from './ollama'
 import { PDFParse } from 'pdf-parse'
+import { writeFileSync, readFileSync, existsSync } from 'fs'
 
 // 1. Enable Debugging Port for Playwright
 app.commandLine.appendSwitch('remote-debugging-port', '9222')
@@ -12,6 +13,24 @@ app.commandLine.appendSwitch('remote-debugging-port', '9222')
 let mainWindow: BrowserWindow
 let view: BrowserView
 let automationRunning = false
+
+interface UserData {
+  text: string
+  embedding: number[]
+}
+
+const userDataPath = join(app.getPath('userData'), 'user-data.json')
+let userProfile: UserData | null = null
+
+// Load on startup
+try {
+  if (existsSync(userDataPath)) {
+    userProfile = JSON.parse(readFileSync(userDataPath, 'utf-8'))
+    console.log('Loaded user profile from:', userDataPath)
+  }
+} catch (error) {
+  console.error('Failed to load user data:', error)
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -40,7 +59,7 @@ function createWindow(): void {
   mainWindow.setBrowserView(view)
 
   // Initial Layout (Right 60% of the screen)
-  const updateBounds = () => {
+  const updateBounds = (): void => {
     const { width, height } = mainWindow.getBounds()
     const sidebarWidth = 450
     view.setBounds({ x: sidebarWidth, y: 0, width: width - sidebarWidth, height: height })
@@ -79,10 +98,13 @@ async function scrollAndHighlight(page: Page, locator: ReturnType<Page['locator'
 // Global set to remember visited companies
 const visitedCompanies = new Set<string>()
 
-ipcMain.handle('start-automation', async (_event, { userProfile }) => {
+ipcMain.handle('start-automation', async () => {
+  if (!userProfile) {
+    throw new Error('User profile not found. Please upload a resume first.')
+  }
   automationRunning = true
 
-  const log = (msg: string, page?: Page) => {
+  const log = (msg: string, page?: Page): void => {
     const url = page ? page.url() : 'Init'
     // Cleaner log format
     const displayUrl = url.includes('workatastartup.com')
@@ -99,7 +121,7 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
     const defaultContext = contexts[0]
 
     // 1. Identify the active page
-    let page = defaultContext.pages().find((p) => p.url().includes('workatastartup.com'))
+    const page = defaultContext.pages().find((p) => p.url().includes('workatastartup.com'))
     if (!page) throw new Error('Please navigate to Work At A Startup first!')
 
     await page.bringToFront()
@@ -118,7 +140,7 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
       // Wait for list to load
       try {
         await page.waitForSelector('a[href^="/companies/"]', { timeout: 5000 })
-      } catch (e) {
+      } catch {
         log('Page empty? Reloading list...', page)
         await page.reload()
         await page.waitForSelector('a[href^="/companies/"]', { timeout: 10000 })
@@ -176,7 +198,7 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
         try {
           await page.waitForLoadState('domcontentloaded')
           await page.waitForTimeout(1500)
-        } catch (e) {
+        } catch {
           log('Timeout loading company, skipping.', page)
           continue
         }
@@ -201,7 +223,7 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
 
             // AI: Quick title check before navigating to save time
             log(`🔍 Checking title: ${jobTitle}`, page)
-            const titleRelevant = await isJobTitleRelevant(jobTitle, userProfile)
+            const titleRelevant = await isJobTitleRelevant(jobTitle, userProfile.embedding)
             if (!titleRelevant) {
               log(`⏭️ Title not relevant, skipping.`, page)
               continue
@@ -232,7 +254,7 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
 
                 // AI: CHECK IF JOB IS RELEVANT (deep check on full description)
                 log('🤖 AI analyzing job fit...', page)
-                const isRelevant = await isJobRelevant(jobDescriptionText, userProfile)
+                const isRelevant = await isJobRelevant(jobDescriptionText, userProfile.embedding)
 
                 if (!isRelevant) {
                   log('❌ AI: Job not a good fit, skipping.', page)
@@ -253,7 +275,10 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
                     await scrollAndHighlight(page, textArea)
 
                     // AI: GENERATE APPLICATION
-                    const coverLetter = await generateApplication(jobDescriptionText, userProfile)
+                    const coverLetter = await generateApplication(
+                      jobDescriptionText,
+                      userProfile.text
+                    )
                     log('📝 Typing application...', page)
                     await textArea.pressSequentially(coverLetter, { delay: 30 })
                     log('✅ Application filled! (Not submitted - testing mode)', page)
@@ -264,8 +289,8 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
                   }
                 }
               }
-            } catch (e: any) {
-              log(`Skipping job: ${e.message}`, page)
+            } catch (e) {
+              log(`Skipping job: ${(e as Error).message}`, page)
             }
 
             // Go back to Company Page
@@ -285,7 +310,7 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
           await page.waitForSelector('a[href^="/companies/"]', { timeout: 3000 })
           // Restore list scroll
           await page.evaluate((y) => window.scrollTo(0, y), listScrollY)
-        } catch (e) {
+        } catch {
           log('List failed to render. Forcing reload...', page)
           await page.goto('https://www.workatastartup.com/companies')
           await page.waitForLoadState('networkidle')
@@ -299,12 +324,12 @@ ipcMain.handle('start-automation', async (_event, { userProfile }) => {
     log('Automation stopped.')
     try {
       await browser.close()
-    } catch (e) {
+    } catch {
       // Ignore disconnection errors
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error(error)
-    mainWindow.webContents.send('log', `Error: ${error.message}`)
+    mainWindow.webContents.send('log', `Error: ${(error as Error).message}`)
   }
 })
 
@@ -319,10 +344,26 @@ ipcMain.handle('parse-resume', async (_event, buffer: ArrayBuffer) => {
     const result = await parser.getText()
     await parser.destroy()
     return result.text
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error parsing PDF:', error)
     throw new Error('Failed to parse PDF')
   }
+})
+
+ipcMain.handle('save-user-profile', async (_event, text: string) => {
+  try {
+    const embedding = await getEmbedding(text)
+    userProfile = { text, embedding }
+    writeFileSync(userDataPath, JSON.stringify(userProfile))
+    return true
+  } catch (error) {
+    console.error('Error saving user profile:', error)
+    throw error
+  }
+})
+
+ipcMain.handle('get-user-profile', async () => {
+  return userProfile?.text || null
 })
 
 app.whenReady().then(() => {

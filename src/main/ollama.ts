@@ -26,7 +26,7 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 /**
  * Generates an embedding for the given text using the embedding model.
  */
-async function getEmbedding(text: string): Promise<number[]> {
+export async function getEmbedding(text: string): Promise<number[]> {
   try {
     const response = await ollama.embed({
       model: MODEL_EMBEDDING,
@@ -46,25 +46,25 @@ async function getEmbedding(text: string): Promise<number[]> {
  * This avoids navigating to job pages that are clearly not a fit.
  * Uses embedding similarity.
  */
-export async function isJobTitleRelevant(jobTitle: string, userProfile: string): Promise<boolean> {
+export async function isJobTitleRelevant(
+  jobTitle: string,
+  userProfileEmbedding: number[]
+): Promise<boolean> {
   // Check cache first
-  const cacheKey = `${jobTitle.trim()}|${userProfile}`
+  const cacheKey = `${jobTitle.trim()}|${userProfileEmbedding.length}` // approximate key
   if (jobTitleCache.has(cacheKey)) {
     return jobTitleCache.get(cacheKey)!
   }
 
   try {
-    const [titleEmbedding, profileEmbedding] = await Promise.all([
-      getEmbedding(jobTitle),
-      getEmbedding(userProfile)
-    ])
+    const titleEmbedding = await getEmbedding(jobTitle)
 
-    if (titleEmbedding.length === 0 || profileEmbedding.length === 0) {
+    if (titleEmbedding.length === 0 || userProfileEmbedding.length === 0) {
       console.warn('[AI Title Check] Failed to get embeddings, defaulting to TRUE')
       return true
     }
 
-    const similarity = cosineSimilarity(titleEmbedding, profileEmbedding)
+    const similarity = cosineSimilarity(titleEmbedding, userProfileEmbedding)
     const isRelevant = similarity >= TITLE_THRESHOLD
 
     console.log(
@@ -95,23 +95,25 @@ const DESCRIPTION_THRESHOLD = 0.5
  * Determines if a job is relevant based on the full job description and user's stated preferences.
  * Uses embedding similarity.
  */
-export async function isJobRelevant(jobDescription: string, userProfile: string): Promise<boolean> {
+export async function isJobRelevant(
+  jobDescription: string,
+  userProfileEmbedding: number[]
+): Promise<boolean> {
   try {
     // Truncate job description if it's too long to avoid context limits (though embeddings handle large contexts well,
     // performance might degrade or it might capture too much noise).
     // For embeddings, sending the first 2000-3000 chars is usually enough to capture the core of the job.
 
-    const [descriptionEmbedding, profileEmbedding] = await Promise.all([
-      getEmbedding(jobDescription),
-      getEmbedding(userProfile)
-    ])
+    // For embeddings, sending the first 2000-3000 chars is usually enough to capture the core of the job.
 
-    if (descriptionEmbedding.length === 0 || profileEmbedding.length === 0) {
+    const descriptionEmbedding = await getEmbedding(jobDescription)
+
+    if (descriptionEmbedding.length === 0 || userProfileEmbedding.length === 0) {
       console.warn('[AI Job Check] Failed to get embeddings, defaulting to TRUE')
       return true
     }
 
-    const similarity = cosineSimilarity(descriptionEmbedding, profileEmbedding)
+    const similarity = cosineSimilarity(descriptionEmbedding, userProfileEmbedding)
     const isRelevant = similarity >= DESCRIPTION_THRESHOLD
 
     console.log(
