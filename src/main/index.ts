@@ -3,7 +3,13 @@ import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { chromium, Page } from 'playwright-core'
-import { isJobTitleRelevant, isJobRelevant, generateApplication, getEmbedding, generateJobPersona } from './ollama'
+import {
+  isJobTitleRelevant,
+  isJobRelevant,
+  generateApplication,
+  getEmbedding,
+  generateJobPersona
+} from './ollama'
 import { PDFParse } from 'pdf-parse'
 import { writeFileSync, readFileSync, existsSync } from 'fs'
 
@@ -309,10 +315,10 @@ ipcMain.handle('start-automation', async () => {
                       userProfile.text
                     )
                     log(`Typing application (${coverLetter.length} chars)...`, { jobTitle })
-                    
+
                     // Typing faster (10ms) and allowing more time (60s) to avoid timeouts
                     await textArea.pressSequentially(coverLetter, { delay: 10, timeout: 60000 })
-                    
+
                     log('Application filled! (Not submitted - testing mode)', {
                       type: 'success',
                       jobTitle
@@ -405,7 +411,7 @@ ipcMain.handle('save-resume', async (_event, buffer: ArrayBuffer) => {
     // 5. Save the ORIGINAL text (for cover letters) and the NEW embedding
     userProfile = { text, embedding, hasResume: true }
     writeFileSync(userDataPath, JSON.stringify(userProfile))
-    
+
     return true
   } catch (error) {
     console.error('Error saving resume:', error)

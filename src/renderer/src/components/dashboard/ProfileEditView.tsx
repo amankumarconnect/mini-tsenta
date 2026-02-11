@@ -32,9 +32,7 @@ export function ProfileEditView({
   return (
     <Card className="flex-shrink-0">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">
-          {hasResume ? 'Replace Resume' : 'Upload Resume'}
-        </CardTitle>
+        <CardTitle className="text-sm">{hasResume ? 'Replace Resume' : 'Upload Resume'}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-xs text-muted-foreground mb-4">

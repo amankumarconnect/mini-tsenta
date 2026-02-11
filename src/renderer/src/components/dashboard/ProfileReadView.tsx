@@ -20,7 +20,6 @@ export function ProfileReadView({
   onStart,
   onStop
 }: ProfileReadViewProps): JSX.Element {
-
   const handleDownload = async (): Promise<void> => {
     // @ts-ignore (exposed by preload)
     await window.api.downloadResume()
@@ -37,9 +36,7 @@ export function ProfileReadView({
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="text-sm text-muted-foreground">
-            {hasResume
-              ? 'Resume uploaded and ready for matching.'
-              : 'No resume uploaded yet.'}
+            {hasResume ? 'Resume uploaded and ready for matching.' : 'No resume uploaded yet.'}
           </div>
 
           {hasResume && (
