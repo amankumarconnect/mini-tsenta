@@ -1,4 +1,4 @@
-# mini-tsenta
+# WorkAtAStartup Ai Automation
 
 Automated job application bot for [WorkAtAStartup.com](https://www.workatastartup.com/). Parses your resume, uses local LLMs to match relevant jobs via semantic similarity, and auto-fills applications with AI-generated cover letters.
 
