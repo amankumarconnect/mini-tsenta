@@ -4,17 +4,13 @@ const ollama = new Ollama()
 const MODEL_GENERATION = process.env.OLLAMA_MODEL_GENERATION || 'gemma3:4b'
 const MODEL_EMBEDDING = process.env.OLLAMA_MODEL_EMBEDDING || 'qwen3-embedding:0.6b'
 
-// Simple in-memory cache for job titles to save inference time
 const MAX_CACHE_SIZE = 100
 const jobTitleCache = new Map<string, { relevant: boolean; score: number }>()
 
-// Configurable thresholds for similarity
-// 0.4 is a common baseline for semantic similarity, but tune as needed.
+// Tune these thresholds to control match sensitivity
 const TITLE_THRESHOLD = 0.45
+const DESCRIPTION_THRESHOLD = 0.45
 
-/**
- * Calculates the cosine similarity between two vectors.
- */
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
   const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0)
   const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0))
@@ -23,17 +19,12 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
   return dotProduct / (magnitudeA * magnitudeB)
 }
 
-/**
- * Generates an embedding for the given text using the embedding model.
- */
 export async function getEmbedding(text: string): Promise<number[]> {
   try {
     const response = await ollama.embed({
       model: MODEL_EMBEDDING,
       input: text
     })
-    // response.embeddings is an array of arrays (one for each input string)
-    // since we only pass one string, we take the first element.
     return response.embeddings[0]
   } catch (error) {
     console.error('Ollama embedding error:', error)
@@ -41,17 +32,12 @@ export async function getEmbedding(text: string): Promise<number[]> {
   }
 }
 
-/**
- * Quick check: is the job title relevant to what the user is looking for?
- * This avoids navigating to job pages that are clearly not a fit.
- * Uses embedding similarity.
- */
+// Quick embedding-based check to skip obviously irrelevant jobs without navigating to them
 export async function isJobTitleRelevant(
   jobTitle: string,
   userProfileEmbedding: number[]
 ): Promise<{ relevant: boolean; score: number }> {
-  // Check cache first
-  const cacheKey = `${jobTitle.trim()}|${userProfileEmbedding.length}` // approximate key
+  const cacheKey = `${jobTitle.trim()}|${userProfileEmbedding.length}`
   if (jobTitleCache.has(cacheKey)) {
     return jobTitleCache.get(cacheKey)!
   }
@@ -75,7 +61,7 @@ export async function isJobTitleRelevant(
 
     const result = { relevant: isRelevant, score: Math.round(similarity * 100) }
 
-    // Update cache
+    // Evict oldest entry when cache is full
     if (jobTitleCache.size >= MAX_CACHE_SIZE) {
       const firstKey = jobTitleCache.keys().next().value
       if (firstKey) jobTitleCache.delete(firstKey)
@@ -85,18 +71,10 @@ export async function isJobTitleRelevant(
     return result
   } catch (error) {
     console.error('Ollama isJobTitleRelevant error:', error)
-    // On error, default to checking the job — don't skip it
     return { relevant: true, score: -1 }
   }
 }
 
-// Slightly lower threshold for full descriptions as they contain more noise
-const DESCRIPTION_THRESHOLD = 0.45
-
-/**
- * Determines if a job is relevant based on the full job description and user's stated preferences.
- * Uses embedding similarity.
- */
 export async function isJobRelevant(
   jobDescription: string,
   userProfileEmbedding: number[]
@@ -119,14 +97,10 @@ export async function isJobRelevant(
     return { relevant: isRelevant, score: Math.round(similarity * 100) }
   } catch (error) {
     console.error('Ollama isJobRelevant error:', error)
-    // On error, default to checking the job — don't skip it
     return { relevant: true, score: -1 }
   }
 }
 
-/**
- * Generates a personalized application/cover letter based on job and user profile
- */
 export async function generateApplication(
   jobDescription: string,
   userProfile: string
@@ -157,10 +131,8 @@ Write the application now:`
   }
 }
 
-/**
- * Generates a "Target Job Persona" from the resume text using an LLM.
- * This persona is used to generate a better embedding for job matching.
- */
+// Generates a hypothetical "ideal job posting" from the resume — produces better
+// semantic matches than embedding the raw resume text directly
 export async function generateJobPersona(resumeText: string): Promise<string> {
   const prompt = `### ROLE
 You are an expert Career Coach and Technical Recruiter with 20+ years of experience in matching candidates to their ideal roles.
@@ -203,6 +175,6 @@ ${resumeText}`
     return response.message.content.trim()
   } catch (error) {
     console.error('Ollama generateJobPersona error:', error)
-    return resumeText // Fallback to original text
+    return resumeText
   }
 }

@@ -63,7 +63,6 @@ function LogEntryRow({ log }: { log: LogEntry }): JSX.Element {
   const isGood = log.type === 'success' || log.type === 'match'
   const isBad = log.type === 'skip' || log.type === 'error'
 
-  // Job match cards get special treatment
   if (hasJobContext) {
     return (
       <div
@@ -98,7 +97,6 @@ function LogEntryRow({ log }: { log: LogEntry }): JSX.Element {
     )
   }
 
-  // Simple log entries
   return (
     <div className="flex items-start gap-2 px-1 py-0.5">
       <LogIcon type={log.type} />

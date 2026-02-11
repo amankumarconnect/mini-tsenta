@@ -2,7 +2,6 @@ import { JSX } from 'react'
 import { Button } from '../ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 
-// @ts-ignore (lucide-react is installed)
 import { Download } from 'lucide-react'
 
 interface ProfileReadViewProps {
@@ -23,7 +22,7 @@ export function ProfileReadView({
   onTogglePause
 }: ProfileReadViewProps): JSX.Element {
   const handleDownload = async (): Promise<void> => {
-    // @ts-ignore (exposed by preload)
+    // @ts-ignore
     await window.api.downloadResume()
   }
 

@@ -18,15 +18,14 @@ function App(): JSX.Element {
   }
 
   useEffect(() => {
-    // Load existing profile
     const loadProfile = async (): Promise<void> => {
       try {
-        // @ts-ignore (window.api is exposed by preload)
+        // @ts-ignore
         const savedProfile = await window.api.getUserProfile()
         if (savedProfile && savedProfile.hasResume) {
           setHasResume(true)
         } else {
-          setEditMode(true) // No profile, go to edit mode
+          setEditMode(true)
         }
       } catch (error) {
         console.error('Failed to load profile:', error)
@@ -39,8 +38,7 @@ function App(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    // Listen for logs from Main process
-    // @ts-ignore (Assuming window.api exists from preload)
+    // @ts-ignore
     const cleanup = window.api.onLog((msg: LogEntry) => {
       setLogs((prev) => [...prev, { ...msg, timestamp: new Date() }])
     })
@@ -50,7 +48,7 @@ function App(): JSX.Element {
   const handleStart = (): void => {
     setIsRunning(true)
     setIsPaused(false)
-    // @ts-ignore (Assuming window.api exists from preload)
+    // @ts-ignore
     window.api.startAutomation()
   }
 
@@ -60,8 +58,7 @@ function App(): JSX.Element {
 
     try {
       const buffer = await file.arrayBuffer()
-      // @ts-ignore (window.api is exposed by preload)
-      // @ts-ignore (window.api is exposed by preload)
+      // @ts-ignore
       await window.api.saveResume(buffer)
       setHasResume(true)
       addLog({ message: 'Resume uploaded and parsed!', type: 'success' })
@@ -76,20 +73,18 @@ function App(): JSX.Element {
 
   const handleTogglePause = (): void => {
     if (isPaused) {
-      // Resume
-      // @ts-ignore (exposed by preload)
+      // @ts-ignore
       window.api.resumeAutomation()
       setIsPaused(false)
     } else {
-      // Pause
-      // @ts-ignore (exposed by preload)
+      // @ts-ignore
       window.api.pauseAutomation()
       setIsPaused(true)
     }
   }
 
   return (
-    // Only occupy the left 450px. The Main process handles the view on the right.
+    // Width matches the sidebar constant in main/index.ts createWindow()
     <div className="h-screen w-[450px] bg-background border-r flex flex-col">
       <div className="p-4 space-y-4 flex-1 overflow-hidden flex flex-col">
         <Header />
