@@ -395,21 +395,23 @@ ipcMain.handle('start-automation', async () => {
       const companiesOnScreen = await page.evaluate(() => {
         // Select all anchor (<a>) elements whose href attribute starts with "/companies/"
         const anchors = Array.from(document.querySelectorAll('a[href^="/companies/"]'))
-        return anchors
-          // Extract the href attribute string from each anchor element
-          .map((a) => a.getAttribute('href'))
-          // Filter out unwanted links — we only want links TO company pages, not other types:
-          .filter(
-            (href): href is string =>
-              href !== null && // Exclude null values (elements without an href)
-              !href.includes('/jobs/') && // Exclude job-specific links (we want company-level links)
-              !href.startsWith('http') && // Exclude absolute external URLs
-              !href.includes('/website') && // Exclude links to company external websites
-              !href.includes('/twitter') && // Exclude links to company Twitter profiles
-              !href.includes('/linkedin') // Exclude links to company LinkedIn profiles
-          )
-          // Remove duplicate URLs — the same company may have multiple link elements on the page
-          .filter((value, index, self) => self.indexOf(value) === index)
+        return (
+          anchors
+            // Extract the href attribute string from each anchor element
+            .map((a) => a.getAttribute('href'))
+            // Filter out unwanted links — we only want links TO company pages, not other types:
+            .filter(
+              (href): href is string =>
+                href !== null && // Exclude null values (elements without an href)
+                !href.includes('/jobs/') && // Exclude job-specific links (we want company-level links)
+                !href.startsWith('http') && // Exclude absolute external URLs
+                !href.includes('/website') && // Exclude links to company external websites
+                !href.includes('/twitter') && // Exclude links to company Twitter profiles
+                !href.includes('/linkedin') // Exclude links to company LinkedIn profiles
+            )
+            // Remove duplicate URLs — the same company may have multiple link elements on the page
+            .filter((value, index, self) => self.indexOf(value) === index)
+        )
       })
 
       // Filter out companies we've already visited in this session to avoid re-processing them.

@@ -223,16 +223,18 @@ function CardAction({ className, ...props }: React.ComponentProps<'div'>) {
  */
 function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
   // Render a simple <div> with horizontal padding matching the card's other sections.
-  return <div
-    // data-slot="card-content" identifies this as the card's content area.
-    data-slot="card-content"
-    className={cn(
-      // 'px-6' - Horizontal padding of 1.5rem (24px) to match the header and footer padding.
-      'px-6',
-      className
-    )}
-    {...props}
-  />
+  return (
+    <div
+      // data-slot="card-content" identifies this as the card's content area.
+      data-slot="card-content"
+      className={cn(
+        // 'px-6' - Horizontal padding of 1.5rem (24px) to match the header and footer padding.
+        'px-6',
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
 /**
