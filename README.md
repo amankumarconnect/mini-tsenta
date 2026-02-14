@@ -19,8 +19,7 @@ Currently in testing mode -- applications are filled but not submitted.
 - Pull required models:
 
 ```
-ollama pull gemma3:4b
-ollama pull qwen3-embedding:0.6b
+Puter blocked by wifi
 ```
 
 ## Setup

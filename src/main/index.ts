@@ -2,14 +2,19 @@ import { app, BrowserWindow, ipcMain, BrowserView, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+
+// Fix for "unable to verify the first certificate" in dev/corporate environments
+if (is.dev) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+}
 import { chromium, Page } from 'playwright-core'
 import {
   isJobTitleRelevant,
   isJobRelevant,
   generateApplication,
-  getEmbedding,
-  generateJobPersona
-} from './ollama'
+  generateJobPersona,
+  initPuter
+} from './puter'
 import { PDFParse } from 'pdf-parse'
 import { writeFileSync, readFileSync, existsSync } from 'fs'
 
@@ -23,7 +28,8 @@ let isPaused = false
 
 interface UserData {
   text: string
-  embedding: number[]
+  persona?: string
+  embedding?: number[]
   hasResume: boolean
 }
 
@@ -102,6 +108,10 @@ ipcMain.handle('start-automation', async () => {
   if (!userProfile) {
     throw new Error('User profile not found. Please upload a resume first.')
   }
+
+  // Initialize Puter auth if needed
+  await initPuter()
+
   automationRunning = true
 
   const log = (
@@ -232,7 +242,10 @@ ipcMain.handle('start-automation', async () => {
             if (jobTitle.length < 5 || /^(view|apply|see|open)\s/i.test(jobTitle)) continue
 
             log(`Checking title match...`, { jobTitle })
-            const titleResult = await isJobTitleRelevant(jobTitle, userProfile.embedding)
+            const titleResult = await isJobTitleRelevant(
+              jobTitle,
+              userProfile.persona || userProfile.text
+            )
             if (!titleResult.relevant) {
               log(`Title not relevant, skipping.`, {
                 type: 'skip',
@@ -267,7 +280,10 @@ ipcMain.handle('start-automation', async () => {
                 })
 
                 log('AI analyzing job description...', { jobTitle })
-                const fitResult = await isJobRelevant(jobDescriptionText, userProfile.embedding)
+                const fitResult = await isJobRelevant(
+                  jobDescriptionText,
+                  userProfile.persona || userProfile.text
+                )
 
                 if (!fitResult.relevant) {
                   log('Not a good fit, skipping.', {
@@ -396,11 +412,8 @@ ipcMain.handle('save-resume', async (_event, buffer: ArrayBuffer) => {
     const persona = await generateJobPersona(text)
     console.log('Generated Persona:', persona)
 
-    console.log('Generating embedding from persona...')
-    const embedding = await getEmbedding(persona)
-
-    // text = original resume (for cover letters), embedding = from persona (for matching)
-    userProfile = { text, embedding, hasResume: true }
+    // text = original resume (for cover letters), persona = summary (for matching)
+    userProfile = { text, persona, hasResume: true }
     writeFileSync(userDataPath, JSON.stringify(userProfile))
 
     return true
