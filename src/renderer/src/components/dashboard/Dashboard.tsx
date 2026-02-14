@@ -8,6 +8,7 @@ interface Application {
   jobUrl: string
   coverLetter: string
   status: string
+  matchScore?: number
   appliedAt: string
 }
 
@@ -104,6 +105,12 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
                   {app.status}
                 </div>
               </div>
+
+              {app.matchScore && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Match Score: {app.matchScore.toFixed(0)}%
+                </div>
+              )}
 
               <div className="mt-2 flex gap-2">
                 <a

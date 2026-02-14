@@ -21,5 +21,6 @@ model Application {
   jobUrl      String   @unique
   coverLetter String
   status      String   @default("submitted") // submitted, drafted, failed
+  matchScore  Float?
   appliedAt   DateTime @default(now())
 }

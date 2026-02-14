@@ -255,7 +255,8 @@ ipcMain.handle('start-automation', async () => {
               jobTitle: string,
               companyName: string,
               jobUrl: string,
-              reason: string
+              reason: string,
+              matchScore?: number
             ) => {
               try {
                 // Check if it already exists to avoid unique constraint errors
@@ -268,7 +269,8 @@ ipcMain.handle('start-automation', async () => {
                     companyName,
                     jobUrl,
                     coverLetter: reason, // Store the reason in the cover letter field
-                    status: 'skipped'
+                    status: 'skipped',
+                    matchScore
                   }
                 })
               } catch (e) {
@@ -290,7 +292,8 @@ ipcMain.handle('start-automation', async () => {
                 jobTitle,
                 relativeUrl.replace('/companies/', ''),
                 fullJobUrl,
-                `Title mismatch (Score: ${titleResult.score})`
+                `Title mismatch (Score: ${titleResult.score})`,
+                titleResult.score
               )
               continue
             }
@@ -342,7 +345,8 @@ ipcMain.handle('start-automation', async () => {
                     jobTitle,
                     relativeUrl.replace('/companies/', ''),
                     fullJobUrl,
-                    `Description mismatch (Score: ${fitResult.score})`
+                    `Description mismatch (Score: ${fitResult.score})`,
+                    fitResult.score
                   )
                 } else {
                   log('Good fit! Generating application...', {
@@ -372,19 +376,28 @@ ipcMain.handle('start-automation', async () => {
 
                     // Save application to DB
                     try {
-                      await prisma.application.create({
+                      console.log('Attempting to save application:', {
+                        jobTitle,
+                        companyName: relativeUrl.replace('/companies/', ''),
+                        jobUrl: fullJobUrl,
+                        matchScore: fitResult.score
+                      })
+                      
+                      const savedApp = await prisma.application.create({
                         data: {
                           jobTitle,
                           companyName: relativeUrl.replace('/companies/', ''),
                           jobUrl: fullJobUrl,
                           coverLetter,
-                          status: 'submitted' // or 'drafted'
+                          status: 'submitted', // or 'drafted'
+                          matchScore: fitResult.score
                         }
                       })
                       log('Application saved to database.', { type: 'success', jobTitle })
+                      console.log('Saved app ID:', savedApp.id)
                     } catch (e) {
                       console.error('Failed to save application:', e)
-                      log('Failed to save application to DB', { type: 'error', jobTitle })
+                      log(`Failed to save application to DB: ${(e as Error).message}`, { type: 'error', jobTitle })
                     }
 
                     // Submission disabled — remove this guard when ready to go live
