@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FileText, ExternalLink, Calendar, CheckCircle } from 'lucide-react'
+import { FileText, ExternalLink, Calendar } from 'lucide-react'
 
 interface Application {
   id: string
@@ -16,6 +16,8 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  const [currentTab, setCurrentTab] = useState<'applied' | 'skipped'>('applied')
+
   useEffect(() => {
     const fetchApps = async () => {
       try {
@@ -31,6 +33,11 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
     fetchApps()
   }, [])
 
+  const filteredApps = applications.filter((app) => {
+    if (currentTab === 'applied') return app.status !== 'skipped'
+    return app.status === 'skipped'
+  })
+
   if (loading) return <div className="p-4 text-center">Loading history...</div>
 
   return (
@@ -42,11 +49,34 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
         </button>
       </div>
 
-      {applications.length === 0 ? (
-        <p className="text-muted-foreground text-center py-8">No applications yet.</p>
+      <div className="flex space-x-2 border-b pb-2 mb-4">
+        <button
+          onClick={() => setCurrentTab('applied')}
+          className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${currentTab === 'applied'
+            ? 'bg-black text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Applied ({applications.filter((a) => a.status !== 'skipped').length})
+        </button>
+        <button
+          onClick={() => setCurrentTab('skipped')}
+          className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${currentTab === 'skipped'
+            ? 'bg-black text-white shadow-sm'
+            : 'text-gray-600 hover:bg-gray-100'
+            }`}
+        >
+          Skipped ({applications.filter((a) => a.status === 'skipped').length})
+        </button>
+      </div>
+
+      {filteredApps.length === 0 ? (
+        <p className="text-muted-foreground text-center py-8">
+          No {currentTab} applications found.
+        </p>
       ) : (
         <div className="space-y-3">
-          {applications.map((app) => (
+          {filteredApps.map((app) => (
             <div
               key={app.id}
               className="border rounded-lg p-3 bg-card text-card-foreground shadow-sm"
@@ -64,7 +94,12 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
                   </div>
                 </div>
                 <div
-                  className={`text-xs px-2 py-1 rounded-full ${app.status === 'submitted' ? 'bg-green-100 text-green-800' : 'bg-gray-100'}`}
+                  className={`text-xs px-2 py-1 rounded-full ${app.status === 'submitted'
+                    ? 'bg-green-100 text-green-800'
+                    : app.status === 'skipped'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-gray-100'
+                    }`}
                 >
                   {app.status}
                 </div>
@@ -84,12 +119,15 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
                   className="text-xs flex items-center gap-1 text-gray-600 hover:underline"
                 >
                   <FileText className="w-3 h-3" />{' '}
-                  {expandedId === app.id ? 'Hide Cover Letter' : 'Show Cover Letter'}
+                  {expandedId === app.id
+                    ? app.status === 'skipped' ? 'Hide Reason' : 'Hide Cover Letter'
+                    : app.status === 'skipped' ? 'Show Reason' : 'Show Cover Letter'}
                 </button>
               </div>
 
               {expandedId === app.id && (
                 <div className="mt-3 p-3 bg-muted/50 rounded text-xs whitespace-pre-wrap font-mono border">
+                  {app.status === 'skipped' && <span className="font-bold">Skipped Reason: </span>}
                   {app.coverLetter}
                 </div>
               )}

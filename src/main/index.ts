@@ -249,6 +249,33 @@ ipcMain.handle('start-automation', async () => {
 
             if (!rawJobHref) continue
 
+            const fullJobUrl = getFullUrl(rawJobHref)
+
+            const recordSkippedJob = async (
+              jobTitle: string,
+              companyName: string,
+              jobUrl: string,
+              reason: string
+            ) => {
+              try {
+                // Check if it already exists to avoid unique constraint errors
+                const exists = await prisma.application.findUnique({ where: { jobUrl } })
+                if (exists) return
+
+                await prisma.application.create({
+                  data: {
+                    jobTitle,
+                    companyName,
+                    jobUrl,
+                    coverLetter: reason, // Store the reason in the cover letter field
+                    status: 'skipped'
+                  }
+                })
+              } catch (e) {
+                console.error(`Failed to record skipped job: ${jobTitle}`, e)
+              }
+            }
+
             if (jobTitle.length < 5 || /^(view|apply|see|open)\s/i.test(jobTitle)) continue
 
             log(`Checking title match...`, { jobTitle })
@@ -259,6 +286,12 @@ ipcMain.handle('start-automation', async () => {
                 jobTitle,
                 matchScore: titleResult.score
               })
+              await recordSkippedJob(
+                jobTitle,
+                relativeUrl.replace('/companies/', ''),
+                fullJobUrl,
+                `Title mismatch (Score: ${titleResult.score})`
+              )
               continue
             }
 
@@ -268,7 +301,7 @@ ipcMain.handle('start-automation', async () => {
               matchScore: titleResult.score
             })
 
-            const fullJobUrl = getFullUrl(rawJobHref)
+            // const fullJobUrl = getFullUrl(rawJobHref) // Alrdy computed above
 
             const companyScrollY = await page.evaluate(() => window.scrollY)
 
@@ -280,6 +313,16 @@ ipcMain.handle('start-automation', async () => {
               const appliedBtn = page.getByText('Applied', { exact: true })
               if ((await appliedBtn.count()) > 0) {
                 log('Already applied, skipping.', { type: 'skip', jobTitle })
+                // Optional: record as 'applied' if not in DB?
+                // For now, let's just record it as skipped/already-applied if we want visibility
+                /*
+                await recordSkippedJob(
+                  jobTitle,
+                  relativeUrl.replace('/companies/', ''),
+                  fullJobUrl,
+                  'Already applied on website'
+                )
+                */
               } else {
                 const jobDescriptionText = await page.evaluate(() => {
                   const content = document.querySelector('main') || document.body
@@ -295,6 +338,12 @@ ipcMain.handle('start-automation', async () => {
                     jobTitle,
                     matchScore: fitResult.score
                   })
+                  await recordSkippedJob(
+                    jobTitle,
+                    relativeUrl.replace('/companies/', ''),
+                    fullJobUrl,
+                    `Description mismatch (Score: ${fitResult.score})`
+                  )
                 } else {
                   log('Good fit! Generating application...', {
                     type: 'success',
