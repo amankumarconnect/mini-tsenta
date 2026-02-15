@@ -10,7 +10,7 @@
     "dev": "node ace serve --hmr",
     "test": "node ace test",
     "lint": "eslint .",
-    "format": "prettier --write .",
+    "format": "prettier --write . --config ../../.prettierrc.json --ignore-path ../../.prettierignore",
     "typecheck": "tsc --noEmit"
   },
   "imports": {
@@ -70,6 +70,5 @@
       "./app/controllers/**/*.ts",
       "./app/middleware/*.ts"
     ]
-  },
-  "prettier": "@adonisjs/prettier-config"
+  }
 }

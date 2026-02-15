@@ -1,0 +1,9 @@
+apps/api/build
+apps/desktop/dist
+apps/desktop/out
+apps/desktop/node_modules
+apps/api/node_modules
+pnpm-lock.yaml
+LICENSE.md
+apps/desktop/tsconfig.json
+apps/desktop/tsconfig.*.json
