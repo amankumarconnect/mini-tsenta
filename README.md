@@ -139,10 +139,10 @@
 
 ## 4) Screenshots
 
-![First screen, without login & resume](screenshots\without-login-and-resume.png)
-![WorkAtAStartup Login Screen](screenshots\workatastartup-login-screen.png)
-![Logged in without resume](screenshots\logged-in-without-resume.png)
-![Resume uploaded](screenshots\resume-uploaded.png)
-![Application History](screenshots\application-history.png)
-![Typing application](screenshots\typing-application.png)
-![Database](screenshots\database.png)
+![First screen, without login & resume](screenshots/without-login-and-resume.png)
+![WorkAtAStartup Login Screen](screenshots/workatastartup-login-screen.png)
+![Logged in without resume](screenshots/logged-in-without-resume.png)
+![Resume uploaded](screenshots/resume-uploaded.png)
+![Application History](screenshots/application-history.png)
+![Typing application](screenshots/typing-application.png)
+![Database](screenshots/database.png)
