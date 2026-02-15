@@ -80,8 +80,16 @@ pnpm run dev:desktop
 
 Starts the Electron desktop application.
 
+### Start Both concurrently
+
+```bash
+pnpm run dev
+```
+
+Runs both the API server and the Desktop application simultaneously using `concurrently`. This is the recommended way to start the development environment.
+
 ## Development
 
 - **Linting:** `pnpm run lint`
 - **Type Checking:** `pnpm run typecheck`
-- **Formatting:** `pnpm run content`
+- **Formatting:** `pnpm run format`
