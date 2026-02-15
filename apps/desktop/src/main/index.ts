@@ -115,6 +115,9 @@ ipcMain.handle("start-automation", async () => {
       matchScore?: number;
     },
   ): void => {
+    console.log(
+      `[AUTOMATION] ${msg} ${opts?.matchScore ? `(Score: ${opts.matchScore})` : ""}`,
+    );
     mainWindow.webContents.send("log", {
       message: msg,
       type: opts?.type || "info",
@@ -152,7 +155,7 @@ ipcMain.handle("start-automation", async () => {
           }
         }
         return null;
-      } catch (e) {
+      } catch {
         return null;
       }
     });

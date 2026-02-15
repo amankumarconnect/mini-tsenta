@@ -136,7 +136,6 @@
   - browser automation connection: CDP (remote-debugging-port)
   - API style: REST JSON over HTTP
 
-
 ## 4) Screenshots
 
 ![First screen, without login & resume](screenshots\without-login-and-resume.png)
