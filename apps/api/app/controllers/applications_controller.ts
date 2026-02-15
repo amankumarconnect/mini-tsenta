@@ -5,8 +5,12 @@ export default class ApplicationsController {
   /**
    * Return a list of all applications
    */
-  async index({}: HttpContext) {
+  async index({ request }: HttpContext) {
+    const userId = request.header("x-user-id");
+    if (!userId) return [];
+
     return prisma.application.findMany({
+      where: { userId },
       orderBy: { appliedAt: "desc" },
     });
   }
@@ -15,6 +19,11 @@ export default class ApplicationsController {
    * Create a new application
    */
   async store({ request, response }: HttpContext) {
+    const userId = request.header("x-user-id");
+    if (!userId) {
+      return response.unauthorized({ message: "Missing User ID header" });
+    }
+
     const data = request.only([
       "jobTitle",
       "companyName",
@@ -25,7 +34,12 @@ export default class ApplicationsController {
     ]);
 
     const existing = await prisma.application.findUnique({
-      where: { jobUrl: data.jobUrl },
+      where: {
+        userId_jobUrl: {
+          userId,
+          jobUrl: data.jobUrl,
+        },
+      },
     });
 
     if (existing) {
@@ -36,6 +50,7 @@ export default class ApplicationsController {
 
     const application = await prisma.application.create({
       data: {
+        userId,
         jobTitle: data.jobTitle,
         companyName: data.companyName,
         jobUrl: data.jobUrl,
@@ -52,6 +67,11 @@ export default class ApplicationsController {
    * Find application by Job URL
    */
   async findByJobUrl({ request, response }: HttpContext) {
+    const userId = request.header("x-user-id");
+    if (!userId) {
+      return response.unauthorized({ message: "Missing User ID header" });
+    }
+
     const qs = request.qs();
     const jobUrl = qs.jobUrl as string;
 
@@ -60,7 +80,12 @@ export default class ApplicationsController {
     }
 
     const application = await prisma.application.findUnique({
-      where: { jobUrl },
+      where: {
+        userId_jobUrl: {
+          userId,
+          jobUrl,
+        },
+      },
     });
 
     if (!application) {

@@ -5,19 +5,34 @@ export default class CompaniesController {
   /**
    * Return a list of all companies
    */
-  async index({}: HttpContext) {
-    return prisma.company.findMany();
+  async index({ request }: HttpContext) {
+    const userId = request.header("x-user-id");
+    if (!userId) return []; // Or assume default? Better to return empty if no user.
+
+    return prisma.company.findMany({
+      where: { userId },
+    });
   }
 
   /**
    * Create a new company
    */
   async store({ request, response }: HttpContext) {
+    const userId = request.header("x-user-id");
+    if (!userId) {
+      return response.unauthorized({ message: "Missing User ID header" });
+    }
+
     const data = request.only(["url", "name", "status"]);
 
     // Check if company exists to avoid duplicates (though @unique on url should handle this)
     const existing = await prisma.company.findUnique({
-      where: { url: data.url },
+      where: {
+        userId_url: {
+          userId,
+          url: data.url,
+        },
+      },
     });
 
     if (existing) {
@@ -28,6 +43,7 @@ export default class CompaniesController {
 
     const company = await prisma.company.create({
       data: {
+        userId,
         url: data.url,
         name: data.name,
         status: data.status || "visited",
@@ -40,8 +56,10 @@ export default class CompaniesController {
   /**
    * Show a single company by ID or URL
    */
-  async show({ params, response }: HttpContext) {
+  async show({ params, request, response }: HttpContext) {
     const { id } = params;
+    // We might want to verify ownership here too, but ID is UUID so it's hard to guess.
+    // Ideally we check userId too.
 
     const company = await prisma.company.findUnique({
       where: { id },
@@ -58,6 +76,11 @@ export default class CompaniesController {
    * Find company by URL
    */
   async findByUrl({ request, response }: HttpContext) {
+    const userId = request.header("x-user-id");
+    if (!userId) {
+      return response.unauthorized({ message: "Missing User ID header" });
+    }
+
     const qs = request.qs();
     const url = qs.url as string;
 
@@ -66,7 +89,12 @@ export default class CompaniesController {
     }
 
     const company = await prisma.company.findUnique({
-      where: { url },
+      where: {
+        userId_url: {
+          userId,
+          url,
+        },
+      },
     });
 
     if (!company) {

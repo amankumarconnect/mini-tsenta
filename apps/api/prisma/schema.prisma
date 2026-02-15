@@ -8,19 +8,25 @@ datasource db {
 
 model Company {
   id        String   @id @default(uuid())
-  url       String   @unique
+  userId    String
+  url       String
   name      String?
   visitedAt DateTime @default(now())
   status    String   @default("visited") // visited, skipped, error
+
+  @@unique([userId, url])
 }
 
 model Application {
   id          String   @id @default(uuid())
+  userId      String
   jobTitle    String
   companyName String
-  jobUrl      String   @unique
+  jobUrl      String
   coverLetter String
   status      String   @default("submitted") // submitted, drafted, failed
   matchScore  Float?
   appliedAt   DateTime @default(now())
+
+  @@unique([userId, jobUrl])
 }

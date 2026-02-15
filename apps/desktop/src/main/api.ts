@@ -19,17 +19,29 @@ export interface Application {
   appliedAt: string;
 }
 
+let currentUserId: string | null = null;
+
+export const setUserId = (id: string) => {
+  currentUserId = id;
+};
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+
+  if (currentUserId) {
+    (headers as any)["X-User-Id"] = currentUserId;
+  }
+
   const response = await fetch(url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {

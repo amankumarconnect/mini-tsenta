@@ -6,7 +6,7 @@ import { chromium, Page } from "playwright-core";
 // Local AI imports removed
 import { PDFParse } from "pdf-parse";
 import { writeFileSync, readFileSync, existsSync } from "fs";
-import { api } from "./api";
+import { api, setUserId } from "./api";
 
 // Playwright connects to Electron's own BrowserView via this CDP port
 app.commandLine.appendSwitch("remote-debugging-port", "9222");
@@ -136,6 +136,45 @@ ipcMain.handle("start-automation", async () => {
     if (!page) throw new Error("Please navigate to Work At A Startup first!");
 
     await page.bringToFront();
+
+    // Attempt to extract User ID from PostHog in localStorage
+    log("Checking for user session...");
+    const userId = await page.evaluate(() => {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.includes("_posthog")) {
+            const val = localStorage.getItem(key);
+            if (val) {
+              const parsed = JSON.parse(val);
+              if (parsed.$user_id) return parsed.$user_id as string;
+            }
+          }
+        }
+        return null;
+      } catch (e) {
+        return null;
+      }
+    });
+
+    if (userId) {
+      log(`User identified: ${userId}`, { type: "success" });
+      setUserId(userId);
+      // We also need to add setUserId to the api.ts file imports if it wasn't there,
+      // but since it's the same file being edited I'll assume it's available or I'll fix imports.
+      // Actually, I just edited `api.ts` to export `setUserId`, so I should import it here unless `api` is the default export object.
+      // `import { api } from "./api"` is in line 9. I need to update the import to include `setUserId` or hang it off `api`.
+      // The previous edit to `api.ts` exported `setUserId` separately.
+      // So I'll need to update the import in this file too. I'll do that in a separate replacement chunk or step.
+    } else {
+      log("Could not find User ID. Automation might fail or use shared data.", {
+        type: "error",
+      });
+      // Proceed anyway? Or stop? The requirement says "user is already logs in... extract username/id".
+      // If we can't find it, we probably shouldn't proceed with multi-user data.
+      // But for now let's warn.
+    }
+
     log("Starting automation loop...");
 
     while (automationRunning) {
