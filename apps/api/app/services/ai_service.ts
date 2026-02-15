@@ -1,25 +1,28 @@
-import { Ollama } from 'ollama'
-import env from '#start/env'
+import { Ollama } from "ollama";
+import env from "#start/env";
 
 export class AiService {
-  private ollama: Ollama
-  private modelGeneration: string
-  private modelEmbedding: string
-  private titleThreshold = 0.45
-  private descriptionThreshold = 0.45
+  private ollama: Ollama;
+  private modelGeneration: string;
+  private modelEmbedding: string;
+  private titleThreshold = 0.45;
+  private descriptionThreshold = 0.45;
 
   constructor() {
-    this.ollama = new Ollama({ host: process.env.OLLAMA_HOST || 'http://127.0.0.1:11434' })
-    this.modelGeneration = process.env.OLLAMA_MODEL_GENERATION || 'gemma3:4b'
-    this.modelEmbedding = process.env.OLLAMA_MODEL_EMBEDDING || 'qwen3-embedding:0.6b'
+    this.ollama = new Ollama({
+      host: process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
+    });
+    this.modelGeneration = process.env.OLLAMA_MODEL_GENERATION || "gemma3:4b";
+    this.modelEmbedding =
+      process.env.OLLAMA_MODEL_EMBEDDING || "qwen3-embedding:0.6b";
   }
 
   private cosineSimilarity(vecA: number[], vecB: number[]): number {
-    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0)
-    const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0))
-    const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0))
-    if (magnitudeA === 0 || magnitudeB === 0) return 0
-    return dotProduct / (magnitudeA * magnitudeB)
+    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+    const magnitudeA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+    const magnitudeB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+    if (magnitudeA === 0 || magnitudeB === 0) return 0;
+    return dotProduct / (magnitudeA * magnitudeB);
   }
 
   async getEmbedding(text: string): Promise<number[]> {
@@ -27,60 +30,72 @@ export class AiService {
       const response = await this.ollama.embed({
         model: this.modelEmbedding,
         input: text,
-      })
-      return response.embeddings[0]
+      });
+      return response.embeddings[0];
     } catch (error) {
-      console.error('Ollama embedding error:', error)
-      return []
+      console.error("Ollama embedding error:", error);
+      return [];
     }
   }
 
   async isJobTitleRelevant(
     jobTitle: string,
-    userProfileEmbedding: number[]
+    userProfileEmbedding: number[],
   ): Promise<{ relevant: boolean; score: number }> {
     try {
-      const titleEmbedding = await this.getEmbedding(jobTitle)
+      const titleEmbedding = await this.getEmbedding(jobTitle);
 
       if (titleEmbedding.length === 0 || userProfileEmbedding.length === 0) {
-        return { relevant: true, score: -1 }
+        return { relevant: true, score: -1 };
       }
 
-      const similarity = this.cosineSimilarity(titleEmbedding, userProfileEmbedding)
-      const isRelevant = similarity >= this.titleThreshold
+      const similarity = this.cosineSimilarity(
+        titleEmbedding,
+        userProfileEmbedding,
+      );
+      const isRelevant = similarity >= this.titleThreshold;
 
       return {
         relevant: isRelevant,
         score: Math.round(similarity * 100),
-      }
+      };
     } catch (error) {
-      console.error('Ollama isJobTitleRelevant error:', error)
-      return { relevant: true, score: -1 }
+      console.error("Ollama isJobTitleRelevant error:", error);
+      return { relevant: true, score: -1 };
     }
   }
 
   async isJobRelevant(
     jobDescription: string,
-    userProfileEmbedding: number[]
+    userProfileEmbedding: number[],
   ): Promise<{ relevant: boolean; score: number }> {
     try {
-      const descriptionEmbedding = await this.getEmbedding(jobDescription)
+      const descriptionEmbedding = await this.getEmbedding(jobDescription);
 
-      if (descriptionEmbedding.length === 0 || userProfileEmbedding.length === 0) {
-        return { relevant: true, score: -1 }
+      if (
+        descriptionEmbedding.length === 0 ||
+        userProfileEmbedding.length === 0
+      ) {
+        return { relevant: true, score: -1 };
       }
 
-      const similarity = this.cosineSimilarity(descriptionEmbedding, userProfileEmbedding)
-      const isRelevant = similarity >= this.descriptionThreshold
+      const similarity = this.cosineSimilarity(
+        descriptionEmbedding,
+        userProfileEmbedding,
+      );
+      const isRelevant = similarity >= this.descriptionThreshold;
 
-      return { relevant: isRelevant, score: Math.round(similarity * 100) }
+      return { relevant: isRelevant, score: Math.round(similarity * 100) };
     } catch (error) {
-      console.error('Ollama isJobRelevant error:', error)
-      return { relevant: true, score: -1 }
+      console.error("Ollama isJobRelevant error:", error);
+      return { relevant: true, score: -1 };
     }
   }
 
-  async generateApplication(jobDescription: string, userProfile: string): Promise<string> {
+  async generateApplication(
+    jobDescription: string,
+    userProfile: string,
+  ): Promise<string> {
     const prompt = `You are a job applicant writing a cover letter. Write a professional, personalized, and concise application based on the job description and user profile below. Do not include any headers, greetings, or sign-offs — just the body text.
 
 USER PROFILE:
@@ -89,21 +104,21 @@ ${userProfile}
 JOB DESCRIPTION:
 ${jobDescription}
 
-Write the application now:`
+Write the application now:`;
 
     try {
       const response = await this.ollama.chat({
         model: this.modelGeneration,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: "user", content: prompt }],
         options: { temperature: 0.7 },
-      })
+      });
       return (
         response.message.content.trim() ||
-        'Hi! I am interested in this role and believe my skills would be a great fit for your team.'
-      )
+        "Hi! I am interested in this role and believe my skills would be a great fit for your team."
+      );
     } catch (error) {
-      console.error('Ollama generateApplication error:', error)
-      return `Hi! I'm interested in this role. Based on my experience and skills, I believe I would be a great fit for your team.`
+      console.error("Ollama generateApplication error:", error);
+      return `Hi! I'm interested in this role. Based on my experience and skills, I believe I would be a great fit for your team.`;
     }
   }
 
@@ -138,18 +153,18 @@ Return **ONLY** the hypothetical Job Description paragraph. Do not output your t
 ---
 
 ### INPUT RESUME
-${resumeText}`
+${resumeText}`;
 
     try {
       const response = await this.ollama.chat({
         model: this.modelGeneration,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: "user", content: prompt }],
         options: { temperature: 0.3 },
-      })
-      return response.message.content.trim()
+      });
+      return response.message.content.trim();
     } catch (error) {
-      console.error('Ollama generateJobPersona error:', error)
-      return resumeText
+      console.error("Ollama generateJobPersona error:", error);
+      return resumeText;
     }
   }
 }

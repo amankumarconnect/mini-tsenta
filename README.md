@@ -53,7 +53,7 @@ This monorepo contains the source code for the Mini-Tsenta application, featurin
     npx prisma db push
     ```
 
-    *Note: You may need to generate the Prisma Client if you encounter issues:*
+    _Note: You may need to generate the Prisma Client if you encounter issues:_
 
     ```bash
     npx prisma generate
