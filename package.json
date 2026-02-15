@@ -4,6 +4,16 @@
   "workspaces": [
     "apps/*"
   ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "@prisma/engines",
+      "prisma",
+      "@swc/core",
+      "electron-winstaller"
+    ]
+  },
   "scripts": {
     "dev:api": "npm run dev --workspace api",
     "dev:desktop": "npm run dev --workspace mini-tsenta",
