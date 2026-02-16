@@ -1,18 +1,19 @@
 import { JSX } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-
 import { Download } from "lucide-react";
 
+// Props interface for ProfileReadView component.
 interface ProfileReadViewProps {
-  hasResume: boolean;
-  onEdit: () => void;
-  isRunning: boolean;
-  isPaused: boolean;
-  onStart: () => void;
-  onTogglePause: () => void;
+  hasResume: boolean; // Indicates if a resume is uploaded.
+  onEdit: () => void; // Callback to switch to edit mode.
+  isRunning: boolean; // Indicates if automation is actively running.
+  isPaused: boolean; // Indicates if automation is paused.
+  onStart: () => void; // Callback to start automation.
+  onTogglePause: () => void; // Callback to toggle pause/resume.
 }
 
+// Component to view current resume status and control automation.
 export function ProfileReadView({
   hasResume,
   onEdit,
@@ -21,8 +22,10 @@ export function ProfileReadView({
   onStart,
   onTogglePause,
 }: ProfileReadViewProps): JSX.Element {
+  // Handler for downloading the stored resume.
   const handleDownload = async (): Promise<void> => {
-    // @ts-ignore
+    // Invoke IPC handler exposed via preload script.
+    // @ts-ignore window.api is defined in preload.
     await window.api.downloadResume();
   };
 
@@ -42,6 +45,7 @@ export function ProfileReadView({
               : "No resume uploaded yet."}
           </div>
 
+          {/* Show download button if resume exists */}
           {hasResume && (
             <Button
               variant="outline"
@@ -56,6 +60,7 @@ export function ProfileReadView({
         </CardContent>
       </Card>
 
+      {/* Control Buttons: Start or Pause/Resume */}
       {!isRunning ? (
         <Button className="w-full" onClick={onStart} disabled={!hasResume}>
           Start Applying

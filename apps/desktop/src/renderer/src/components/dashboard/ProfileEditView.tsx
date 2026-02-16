@@ -1,16 +1,17 @@
 import { useRef, JSX } from "react";
 import { Button } from "../ui/button";
-
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 
+// Props interface for ProfileEditView component.
 interface ProfileEditViewProps {
-  hasResume: boolean;
-  onCancel?: () => void;
-  onFileUpload: (file: File) => Promise<void>;
-  isParsing: boolean;
-  isRunning: boolean;
+  hasResume: boolean; // Indicates if a resume already exists.
+  onCancel?: () => void; // Optional callback to cancel editing.
+  onFileUpload: (file: File) => Promise<void>; // Async callback to handle file upload.
+  isParsing: boolean; // Loading state during resume parsing.
+  isRunning: boolean; // State to disable upload if automation is running.
 }
 
+// Component for uploading or replacing the user's resume.
 export function ProfileEditView({
   hasResume,
   onCancel,
@@ -18,14 +19,17 @@ export function ProfileEditView({
   isParsing,
   isRunning,
 }: ProfileEditViewProps): JSX.Element {
+  // Ref to the hidden file input element.
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Handler for file selection event.
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ): Promise<void> => {
     const file = event.target.files?.[0];
     if (!file) return;
-    await onFileUpload(file);
+    await onFileUpload(file); // Trigger upload.
+    // Reset input value to allow re-selecting the same file if needed.
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -44,6 +48,7 @@ export function ProfileEditView({
           generate your job persona.
         </div>
 
+        {/* Hidden file input controlled via the Button below */}
         <input
           type="file"
           ref={fileInputRef}
@@ -55,12 +60,13 @@ export function ProfileEditView({
         <Button
           variant="outline"
           className="w-full"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isParsing || isRunning}
+          onClick={() => fileInputRef.current?.click()} // Programmatically click input.
+          disabled={isParsing || isRunning} // Prevent interaction during parsing/running.
         >
           {isParsing ? "Parsing..." : "Select PDF Resume"}
         </Button>
 
+        {/* Cancel button shown only if onCancel prop is provided (e.g. when resuming exists) */}
         {onCancel && (
           <Button
             variant="ghost"

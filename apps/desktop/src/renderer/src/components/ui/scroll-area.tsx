@@ -5,6 +5,7 @@ import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";
 
 import { cn } from "@/lib/utils";
 
+// Scrollable area component with custom scrollbars.
 function ScrollArea({
   className,
   children,
@@ -28,6 +29,7 @@ function ScrollArea({
   );
 }
 
+// Custom scrollbar component.
 function ScrollBar({
   className,
   orientation = "vertical",

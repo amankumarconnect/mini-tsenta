@@ -1,5 +1,6 @@
 import { JSX } from "react";
 
+// Simple Header component for the dashboard.
 export function Header(): JSX.Element {
   return (
     <header>

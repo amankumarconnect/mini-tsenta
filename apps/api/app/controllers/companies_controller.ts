@@ -5,10 +5,12 @@ export default class CompaniesController {
   /**
    * Return a list of all companies
    */
+  // Handle GET /companies
   async index({ request }: HttpContext) {
-    const userId = request.header("x-user-id");
-    if (!userId) return []; // Or assume default? Better to return empty if no user.
+    const userId = request.header("x-user-id"); // Get user ID from header.
+    if (!userId) return []; // Return empty if no user identified.
 
+    // Fetch companies associated with the user.
     return prisma.company.findMany({
       where: { userId },
     });
@@ -17,12 +19,14 @@ export default class CompaniesController {
   /**
    * Create a new company
    */
+  // Handle POST /companies
   async store({ request, response }: HttpContext) {
     const userId = request.header("x-user-id");
     if (!userId) {
       return response.unauthorized({ message: "Missing User ID header" });
     }
 
+    // validate request body.
     const data = request.only(["url", "name", "status"]);
 
     // Check if company exists to avoid duplicates (though @unique on url should handle this)
@@ -37,26 +41,28 @@ export default class CompaniesController {
 
     if (existing) {
       return response
-        .status(409)
+        .status(409) // Conflict
         .send({ message: "Company already exists", data: existing });
     }
 
+    // Create new company record.
     const company = await prisma.company.create({
       data: {
         userId,
         url: data.url,
         name: data.name,
-        status: data.status || "visited",
+        status: data.status || "visited", // Default status.
       },
     });
 
-    return response.status(201).send(company);
+    return response.status(201).send(company); // Created.
   }
 
   /**
    * Show a single company by ID or URL
    */
-  async show({ params, request, response }: HttpContext) {
+  // Handle GET /companies/:id (Not fully implemented/used in routes yet)
+  async show({ params, response }: HttpContext) {
     const { id } = params;
     // We might want to verify ownership here too, but ID is UUID so it's hard to guess.
     // Ideally we check userId too.
@@ -75,6 +81,7 @@ export default class CompaniesController {
   /**
    * Find company by URL
    */
+  // Handle GET /companies/search?url=...
   async findByUrl({ request, response }: HttpContext) {
     const userId = request.header("x-user-id");
     if (!userId) {
@@ -88,6 +95,7 @@ export default class CompaniesController {
       return response.badRequest({ message: "Missing url query parameter" });
     }
 
+    // Search for company by user ID and URL.
     const company = await prisma.company.findUnique({
       where: {
         userId_url: {

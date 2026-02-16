@@ -3,6 +3,7 @@ import { Label as LabelPrimitive } from "radix-ui";
 
 import { cn } from "@/lib/utils";
 
+// Standard Label component built on Radix UI.
 function Label({
   className,
   ...props

@@ -1,10 +1,21 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
+    "baseUrl": ".", // Base directory to resolve non-relative module names.
     "paths": {
-      "@/*": ["src/renderer/src/*"]
+      "@/*": [
+        "src/renderer/src/*"
+      ] // Map import path '@/*' to 'src/renderer/src/*' for cleaner imports.
     }
   },
-  "files": [],
-  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }]
+  "files": [], // Explicitly include no files in this root config; it relies on references.
+  "references": [
+    // Reference the Node.js/Electron main process configuration.
+    {
+      "path": "./tsconfig.node.json"
+    },
+    // Reference the Web/Renderer process configuration.
+    {
+      "path": "./tsconfig.web.json"
+    }
+  ]
 }

@@ -1,0 +1,12 @@
+
+> api@0.0.0 typecheck
+> tsc --noEmit
+
+app/controllers/companies_controller.ts(65,24): error TS6133: 'request' is declared but its value is never read.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path C:\Users\acer\Desktop\mini-tsenta\apps\api
+npm error workspace api@0.0.0
+npm error location C:\Users\acer\Desktop\mini-tsenta\apps\api
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c tsc --noEmit

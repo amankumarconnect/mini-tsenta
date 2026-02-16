@@ -3,29 +3,33 @@ import { join } from "path";
 import { electronApp, is } from "@electron-toolkit/utils";
 import icon from "../../resources/icon.png?asset";
 import { chromium, Page } from "playwright-core";
-// Local AI imports removed
+// Local AI imports removed as logic has been moved to API
 import { PDFParse } from "pdf-parse";
 import { writeFileSync, readFileSync, existsSync } from "fs";
-import { api, setUserId } from "./api";
+import { api, setUserId } from "./api"; // Import API client and user ID setter.
 
-// Playwright connects to Electron's own BrowserView via this CDP port
+// Playwright connects to Electron's own BrowserView via this CDP (Chrome DevTools Protocol) port.
+// This allows the automation script to control the Electron window/view as if it were a browser tab.
 app.commandLine.appendSwitch("remote-debugging-port", "9222");
 
-let mainWindow: BrowserWindow;
-let view: BrowserView;
-let automationRunning = false;
-let isPaused = false;
+let mainWindow: BrowserWindow; // Reference to the main application window.
+let view: BrowserView; // Reference to the BrowserView that hosts the target website (WorkAtAStartup).
+let automationRunning = false; // Flag to track if the automation loop is active.
+let isPaused = false; // Flag to track if the automation is currently paused.
 
+// Interface defining the user data stored locally.
 interface UserData {
-  text: string;
-  embedding: number[];
-  hasResume: boolean;
+  text: string; // Raw text of the user's resume.
+  embedding: number[]; // Vector embedding of the user's job persona.
+  hasResume: boolean; // Boolean indicating if a resume is uploaded.
 }
 
+// Define paths for storing user data persistence.
 const userDataPath = join(app.getPath("userData"), "user-data.json");
 const resumePath = join(app.getPath("userData"), "resume.pdf");
-let userProfile: UserData | null = null;
+let userProfile: UserData | null = null; // In-memory cache of the user profile.
 
+// on module load, attempt to load existing user profile from disk.
 try {
   if (existsSync(userDataPath)) {
     userProfile = JSON.parse(readFileSync(userDataPath, "utf-8"));
@@ -35,78 +39,87 @@ try {
   console.error("Failed to load user data:", error);
 }
 
+// Function to create the main application window.
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    show: false,
+    show: false, // Don't show immediately (wait for 'ready-to-show').
     autoHideMenuBar: true,
-    icon,
+    icon, // App icon.
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+      preload: join(__dirname, "../preload/index.js"), // Load preload script.
+      sandbox: false, // Disable sandbox for full Node.js access in preload.
     },
   });
 
+  // Show window when content is ready to prevent flickering.
   mainWindow.on("ready-to-show", () => {
     mainWindow.show();
   });
 
-  // Layout: left 450px = React control panel, right = live WorkAtAStartup browsing
+  // Create a BrowserView for the automated browsing session.
+  // Layout: left 450px = React control panel (Renderer), right = live WorkAtAStartup browsing (BrowserView).
   view = new BrowserView({
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
+      nodeIntegration: false, // Security: Disable Node integration in the external site.
+      contextIsolation: true, // Security: Enable context isolation.
     },
   });
-  mainWindow.setBrowserView(view);
+  mainWindow.setBrowserView(view); // Attach view to window.
 
+  // Function to update the BrowserView bounds when the main window is resized.
   const updateBounds = (): void => {
     const { width, height } = mainWindow.getBounds();
-    const sidebarWidth = 450;
+    const sidebarWidth = 450; // Fixed width for the sidebar.
     view.setBounds({
-      x: sidebarWidth,
+      x: sidebarWidth, // Positioned to the right of the sidebar.
       y: 0,
-      width: width - sidebarWidth,
-      height: height,
+      width: width - sidebarWidth, // Fill remaining width.
+      height: height, // Fill full height.
     });
   };
 
+  // Listen for resize events to adjust layout.
   mainWindow.on("resize", updateBounds);
-  updateBounds();
+  updateBounds(); // Initial layout.
 
+  // Load the target website in the BrowserView.
   view.webContents.loadURL("https://www.workatastartup.com/companies");
 
+  // Load the Renderer process (UI).
   if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+    mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]); // Load from dev server.
   } else {
-    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+    mainWindow.loadFile(join(__dirname, "../renderer/index.html")); // Load from built files.
   }
 }
 
+// Helper to ensure URLs are absolute.
 function getFullUrl(partialUrl: string): string {
-  if (partialUrl.startsWith("http")) return partialUrl;
-  return `https://www.workatastartup.com${partialUrl}`;
+  if (partialUrl.startsWith("http")) return partialUrl; // Already absolute.
+  return `https://www.workatastartup.com${partialUrl}`; // Prepend base URL.
 }
 
+// Helper to scroll an element into view and highlight it (visual feedback).
 async function scrollAndHighlight(
   page: Page,
   locator: ReturnType<Page["locator"]>,
 ): Promise<void> {
   await locator.evaluate((el) => {
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.scrollIntoView({ behavior: "smooth", block: "center" }); // Scroll to element.
   });
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(800); // Wait for scroll animation to settle.
 }
 
-// const visitedCompanies = new Set<string>() // Replaced by DB
-
+// IPC Handler: Start the automation process.
 ipcMain.handle("start-automation", async () => {
   if (!userProfile) {
     throw new Error("User profile not found. Please upload a resume first.");
   }
-  automationRunning = true;
+  automationRunning = true; // Set running flag.
 
+  // Helper function to send logs to the Renderer process.
   const log = (
     msg: string,
     opts?: {
@@ -118,6 +131,7 @@ ipcMain.handle("start-automation", async () => {
     console.log(
       `[AUTOMATION] ${msg} ${opts?.matchScore ? `(Score: ${opts.matchScore})` : ""}`,
     );
+    // Send log event via IPC to the renderer window.
     mainWindow.webContents.send("log", {
       message: msg,
       type: opts?.type || "info",
@@ -129,18 +143,21 @@ ipcMain.handle("start-automation", async () => {
   log("Connecting to browser...");
 
   try {
+    // connect Playwright to the Electron process via the open CDP port.
     const browser = await chromium.connectOverCDP("http://localhost:9222");
     const contexts = browser.contexts();
-    const defaultContext = contexts[0];
+    const defaultContext = contexts[0]; // Get the main context.
 
+    // Find the page in the BrowserView that matches the target URL.
     const page = defaultContext
       .pages()
       .find((p) => p.url().includes("workatastartup.com"));
     if (!page) throw new Error("Please navigate to Work At A Startup first!");
 
-    await page.bringToFront();
+    await page.bringToFront(); // Ensure it's active.
 
-    // Attempt to extract User ID from PostHog in localStorage
+    // Attempt to extract User ID from PostHog in localStorage.
+    // This allows identifying the user session for the backend API.
     log("Checking for user session...");
     const userId = await page.evaluate(() => {
       try {
@@ -162,31 +179,26 @@ ipcMain.handle("start-automation", async () => {
 
     if (userId) {
       log(`User identified: ${userId}`, { type: "success" });
-      setUserId(userId);
-      // We also need to add setUserId to the api.ts file imports if it wasn't there,
-      // but since it's the same file being edited I'll assume it's available or I'll fix imports.
-      // Actually, I just edited `api.ts` to export `setUserId`, so I should import it here unless `api` is the default export object.
-      // `import { api } from "./api"` is in line 9. I need to update the import to include `setUserId` or hang it off `api`.
-      // The previous edit to `api.ts` exported `setUserId` separately.
-      // So I'll need to update the import in this file too. I'll do that in a separate replacement chunk or step.
+      setUserId(userId); // Set the user ID in the API client.
     } else {
       log("Could not find User ID. Automation might fail or use shared data.", {
         type: "error",
       });
-      // Proceed anyway? Or stop? The requirement says "user is already logs in... extract username/id".
-      // If we can't find it, we probably shouldn't proceed with multi-user data.
-      // But for now let's warn.
+      // Optionally stop or proceed with warning. Currently proceeding.
     }
 
     log("Starting automation loop...");
 
+    // Main automation loop.
     while (automationRunning) {
+      // Check for pause state.
       while (isPaused && automationRunning) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        if (!automationRunning) break;
+        await new Promise((resolve) => setTimeout(resolve, 500)); // Sleep while paused.
+        if (!automationRunning) break; // Exit if stopped while paused.
       }
-      if (!automationRunning) break;
+      if (!automationRunning) break; // Exit if stopped.
 
+      // Check if current page is the companies list.
       const isListUrl =
         page.url().includes("/companies") &&
         !page.url().includes("/companies/");
@@ -197,6 +209,7 @@ ipcMain.handle("start-automation", async () => {
         await page.waitForTimeout(2000);
       }
 
+      // Wait for company list items to load.
       try {
         await page.waitForSelector('a[href^="/companies/"]', { timeout: 5000 });
       } catch {
@@ -207,6 +220,7 @@ ipcMain.handle("start-automation", async () => {
         });
       }
 
+      // Extract unique company links visible on screen.
       const companiesOnScreen = await page.evaluate(() => {
         const anchors = Array.from(
           document.querySelectorAll('a[href^="/companies/"]'),
@@ -222,10 +236,11 @@ ipcMain.handle("start-automation", async () => {
               !href.includes("/twitter") &&
               !href.includes("/linkedin"),
           )
-          .filter((value, index, self) => self.indexOf(value) === index);
+          .filter((value, index, self) => self.indexOf(value) === index); // Deduplicate.
       });
 
       const newCompanies: string[] = [];
+      // Filter out companies that have already been visited.
       for (const c of companiesOnScreen) {
         const fullUrl = getFullUrl(c);
         const exists = await api.checkCompanyExists(fullUrl);
@@ -234,20 +249,24 @@ ipcMain.handle("start-automation", async () => {
 
       log(`Found ${newCompanies.length} new companies.`);
 
+      // If no new companies visible, scroll down to load more.
       if (newCompanies.length === 0) {
         log("No new companies. Scrolling...");
-        await page.mouse.wheel(0, 3000);
-        await page.waitForTimeout(3000);
+        await page.mouse.wheel(0, 3000); // Scroll down by 3000px.
+        await page.waitForTimeout(3000); // Wait for lazy load.
         continue;
       }
 
+      // Process each new company.
       for (const relativeUrl of newCompanies) {
+        // Check pause state again inside loop.
         while (isPaused && automationRunning) {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
         if (!automationRunning) break;
 
         const fullCompanyUrl = getFullUrl(relativeUrl);
+        // Save company as 'visited' immediately to avoid re-processing on error.
         try {
           await api.createCompany({
             url: fullCompanyUrl,
@@ -261,14 +280,15 @@ ipcMain.handle("start-automation", async () => {
         const companyUrl = getFullUrl(relativeUrl);
         log(`Checking company: ${relativeUrl.replace("/companies/", "")}`);
 
+        // Highlight the company link before clicking.
         const companyLink = page.locator(`a[href="${relativeUrl}"]`).first();
         try {
           await scrollAndHighlight(page, companyLink);
         } catch {
-          // Element may not be visible
+          // Element may not be visible, simplify proceed.
         }
-        const listScrollY = await page.evaluate(() => window.scrollY);
-        await page.goto(companyUrl);
+        const listScrollY = await page.evaluate(() => window.scrollY); // Remember scroll position.
+        await page.goto(companyUrl); // Navigate to company detail page.
 
         try {
           await page.waitForLoadState("domcontentloaded");
@@ -278,11 +298,13 @@ ipcMain.handle("start-automation", async () => {
           continue;
         }
 
+        // Find all job links on the company page.
         const jobLinks = await page.locator('a[href*="/jobs/"]').all();
 
         if (jobLinks.length > 0) {
           log(`Found ${jobLinks.length} job(s) at this company.`);
 
+          // Process each job.
           for (const jobLink of jobLinks) {
             while (isPaused && automationRunning) {
               await new Promise((resolve) => setTimeout(resolve, 500));
@@ -298,6 +320,7 @@ ipcMain.handle("start-automation", async () => {
 
             const fullJobUrl = getFullUrl(rawJobHref);
 
+            // Helper to record a skipped job in the database for tracking.
             const recordSkippedJob = async (
               jobTitle: string,
               companyName: string,
@@ -315,7 +338,7 @@ ipcMain.handle("start-automation", async () => {
                   companyName,
                   jobUrl,
                   coverLetter: reason,
-                  status: "skipped",
+                  status: "skipped", // Status is 'skipped'
                   matchScore,
                 });
               } catch (e) {
@@ -323,6 +346,7 @@ ipcMain.handle("start-automation", async () => {
               }
             };
 
+            // Basic filtering: skip short titles or action buttons labeled as titles.
             if (
               jobTitle.length < 5 ||
               /^(view|apply|see|open)\s/i.test(jobTitle)
@@ -330,6 +354,7 @@ ipcMain.handle("start-automation", async () => {
               continue;
 
             log(`Checking title match...`, { jobTitle });
+            // Check title relevance using AI.
             const titleResult = await api.aiCheckJobRelevance(
               jobTitle,
               userProfile.embedding,
@@ -359,18 +384,19 @@ ipcMain.handle("start-automation", async () => {
 
             // const fullJobUrl = getFullUrl(rawJobHref) // Alrdy computed above
 
-            const companyScrollY = await page.evaluate(() => window.scrollY);
+            const companyScrollY = await page.evaluate(() => window.scrollY); // Remember scroll.
 
-            // Navigate instead of clicking — links on this site open in new tabs
+            // Navigate to job detail page.
+            // Navigate instead of clicking — links on this site often open in new tabs which complicates control.
             await page.goto(fullJobUrl);
             await page.waitForTimeout(1500);
 
             try {
+              // Check if "Applied" button exists (meaning we already applied manually).
               const appliedBtn = page.getByText("Applied", { exact: true });
               if ((await appliedBtn.count()) > 0) {
                 log("Already applied, skipping.", { type: "skip", jobTitle });
-                // Optional: record as 'applied' if not in DB?
-                // For now, let's just record it as skipped/already-applied if we want visibility
+                // Logic to record already applied jobs is commented out below.
                 /*
                 await recordSkippedJob(
                   jobTitle,
@@ -380,6 +406,7 @@ ipcMain.handle("start-automation", async () => {
                 )
                 */
               } else {
+                // Extract job description text.
                 const jobDescriptionText = await page.evaluate(() => {
                   const content =
                     document.querySelector("main") || document.body;
@@ -387,6 +414,7 @@ ipcMain.handle("start-automation", async () => {
                 });
 
                 log("AI analyzing job description...", { jobTitle });
+                // Check description relevance using AI.
                 const fitResult = await api.aiCheckJobRelevance(
                   jobDescriptionText,
                   userProfile.embedding,
@@ -413,6 +441,7 @@ ipcMain.handle("start-automation", async () => {
                     matchScore: fitResult.score,
                   });
 
+                  // Job is a match. Try to find the 'Apply' button to open the form.
                   const applyBtn = page
                     .getByText("Apply", { exact: true })
                     .first();
@@ -422,10 +451,12 @@ ipcMain.handle("start-automation", async () => {
                     await page.waitForTimeout(500);
                   }
 
+                  // Look for the textarea to paste the cover letter.
                   const textArea = page.locator("textarea").first();
                   if (await textArea.isVisible()) {
                     await scrollAndHighlight(page, textArea);
 
+                    // Generate custom cover letter using AI.
                     const { coverLetter } = await api.aiGenerateApplication(
                       jobDescriptionText,
                       userProfile.text,
@@ -434,12 +465,13 @@ ipcMain.handle("start-automation", async () => {
                       jobTitle,
                     });
 
+                    // Type the cover letter into the textarea.
                     await textArea.pressSequentially(coverLetter, {
-                      delay: 10,
+                      delay: 10, // Human-like typing delay.
                       timeout: 60000,
                     });
 
-                    // Save application to DB
+                    // Save the successful application generation to DB.
                     try {
                       console.log("Attempting to save application:", {
                         jobTitle,
@@ -453,7 +485,7 @@ ipcMain.handle("start-automation", async () => {
                         companyName: relativeUrl.replace("/companies/", ""),
                         jobUrl: fullJobUrl,
                         coverLetter,
-                        status: "submitted",
+                        status: "submitted", // Marking as submitted (simulated).
                         matchScore: fitResult.score,
                       });
                       log("Application saved to database.", {
@@ -472,7 +504,8 @@ ipcMain.handle("start-automation", async () => {
                       );
                     }
 
-                    // Submission disabled — remove this guard when ready to go live
+                    // Submission is intentionally disabled for safety in this demo.
+                    // To enable, we would click the submit button here.
                     log("Application filled! (Not submitted - testing mode)", {
                       type: "success",
                       jobTitle,
@@ -487,15 +520,16 @@ ipcMain.handle("start-automation", async () => {
               });
             }
 
-            await page.goBack();
+            await page.goBack(); // Go back to company page.
             await page.waitForTimeout(1000);
-            await page.evaluate((y) => window.scrollTo(0, y), companyScrollY);
+            await page.evaluate((y) => window.scrollTo(0, y), companyScrollY); // Restore scroll.
           }
         }
 
         log("Returning to list...");
-        await page.goBack();
+        await page.goBack(); // Go back to companies list.
 
+        // Restore list scroll position.
         try {
           await page.waitForSelector('a[href^="/companies/"]', {
             timeout: 3000,
@@ -513,9 +547,9 @@ ipcMain.handle("start-automation", async () => {
 
     log("Automation stopped.");
     try {
-      await browser.close();
+      await browser.close(); // Close browser connection.
     } catch {
-      // CDP disconnection errors are expected
+      // CDP disconnection errors are expected when shutting down.
     }
   } catch (error) {
     console.error(error);
@@ -526,6 +560,7 @@ ipcMain.handle("start-automation", async () => {
   }
 });
 
+// IPC Handler: Stop automation.
 ipcMain.on("stop-automation", () => {
   automationRunning = false;
   isPaused = false;
@@ -533,11 +568,13 @@ ipcMain.on("stop-automation", () => {
     message: "Stopping automation and closing app...",
     type: "info",
   });
+  // Delay quit to allow UI to update.
   setTimeout(() => {
     app.quit();
   }, 1000);
 });
 
+// IPC Handler: Pause automation.
 ipcMain.on("pause-automation", () => {
   if (automationRunning) {
     isPaused = true;
@@ -548,6 +585,7 @@ ipcMain.on("pause-automation", () => {
   }
 });
 
+// IPC Handler: Resume automation.
 ipcMain.on("resume-automation", () => {
   if (automationRunning && isPaused) {
     isPaused = false;
@@ -558,26 +596,28 @@ ipcMain.on("resume-automation", () => {
   }
 });
 
-// Pipeline: PDF → text → LLM generates a "target job persona" → embedding for matching
+// IPC Handler: Process uploaded resume.
+// Pipeline: PDF -> text -> AI (Generate Persona) -> AI (Embedding) -> Save.
 ipcMain.handle("save-resume", async (_event, buffer: ArrayBuffer) => {
   try {
-    writeFileSync(resumePath, Buffer.from(buffer));
+    writeFileSync(resumePath, Buffer.from(buffer)); // Save PDF to disk.
 
+    // Parse PDF to text.
     const parser = new PDFParse({ data: Buffer.from(buffer) });
     const result = await parser.getText();
     await parser.destroy();
     const text = result.text;
 
     console.log("Generating Target Job Persona from resume...");
-    const { persona } = await api.aiGenerateJobPersona(text);
+    const { persona } = await api.aiGenerateJobPersona(text); // AI generates persona.
     console.log("Generated Persona:", persona);
 
     console.log("Generating embedding from persona...");
-    const { embedding } = await api.aiGetEmbedding(persona);
+    const { embedding } = await api.aiGetEmbedding(persona); // Get embedding for persona.
 
-    // text = original resume (for cover letters), embedding = from persona (for matching)
+    // Update user profile: uses original text for cover letters, but persona embedding for matching.
     userProfile = { text, embedding, hasResume: true };
-    writeFileSync(userDataPath, JSON.stringify(userProfile));
+    writeFileSync(userDataPath, JSON.stringify(userProfile)); // Save profile to disk.
 
     return true;
   } catch (error) {
@@ -586,11 +626,13 @@ ipcMain.handle("save-resume", async (_event, buffer: ArrayBuffer) => {
   }
 });
 
+// IPC Handler: Download existing resume.
 ipcMain.handle("download-resume", async () => {
   if (!existsSync(resumePath)) {
     throw new Error("No resume found to download");
   }
 
+  // Show save dialog to user.
   const { filePath } = await dialog.showSaveDialog({
     title: "Download Resume",
     defaultPath: "resume.pdf",
@@ -598,14 +640,16 @@ ipcMain.handle("download-resume", async () => {
   });
 
   if (filePath) {
-    writeFileSync(filePath, readFileSync(resumePath));
+    writeFileSync(filePath, readFileSync(resumePath)); // Copy file to user-selected path.
   }
 });
 
+// IPC Handler: Get current user profile status.
 ipcMain.handle("get-user-profile", async () => {
   return userProfile ? { hasResume: userProfile.hasResume } : null;
 });
 
+// IPC Handler: Fetch application history.
 ipcMain.handle("get-applications", async () => {
   try {
     return await api.getApplications();
@@ -615,7 +659,8 @@ ipcMain.handle("get-applications", async () => {
   }
 });
 
+// App ready event: Initialize app.
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId("com.mini-tsenta");
-  createWindow();
+  electronApp.setAppUserModelId("com.mini-tsenta"); // Set App ID for notifications involved.
+  createWindow(); // Create the main window.
 });

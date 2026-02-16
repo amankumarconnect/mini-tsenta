@@ -1,7 +1,7 @@
 {
-  "extends": "@adonisjs/tsconfig/tsconfig.app.json",
+  "extends": "@adonisjs/tsconfig/tsconfig.app.json", // Extend the official AdonisJS TypeScript configuration.
   "compilerOptions": {
-    "rootDir": "./",
-    "outDir": "./build"
+    "rootDir": "./", // Specify the root directory of input files.
+    "outDir": "./build" // Specify the output directory for compiled files.
   }
 }

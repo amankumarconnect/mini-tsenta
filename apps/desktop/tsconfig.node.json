@@ -1,8 +1,14 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*"],
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json", // Extend the base Node.js TypeScript config from electron-toolkit.
+  "include": [
+    "electron.vite.config.*", // Include the build configuration file.
+    "src/main/**/*", // Include all files in the main process directory.
+    "src/preload/**/*" // Include all files in the preload directory.
+  ],
   "compilerOptions": {
-    "composite": true,
-    "types": ["electron-vite/node"]
+    "composite": true, // Enable project references (required for referenced projects).
+    "types": [
+      "electron-vite/node"
+    ] // Include type definitions for Electron-Vite Node helpers.
   }
 }

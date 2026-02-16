@@ -1,20 +1,22 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json", // Extend the base Web (React+Vite) TypeScript config from electron-toolkit.
   "include": [
-    "src/renderer/src/env.d.ts",
-    "src/renderer/src/**/*",
-    "src/renderer/src/**/*.tsx",
-    "src/preload/*.d.ts"
+    "src/renderer/src/env.d.ts", // Include environment variable type definitions.
+    "src/renderer/src/**/*", // Include all source files in the renderer directory.
+    "src/renderer/src/**/*.tsx", // Explicitly include TSX files (though **/* covers it, this emphasizes it).
+    "src/preload/*.d.ts" // Include type definitions from preload scripts (for exposure to renderer).
   ],
   "compilerOptions": {
-    "composite": true,
-    "jsx": "react-jsx",
-    "baseUrl": ".",
+    "composite": true, // Enable project references.
+    "jsx": "react-jsx", // Use the new React JSX transform.
+    "baseUrl": ".", // Base path for module resolution.
     "paths": {
       "@renderer/*": [
-        "src/renderer/src/*"
+        "src/renderer/src/*" // Map '@renderer/*' to renderer source.
       ],
-      "@/*": ["src/renderer/src/*"]
+      "@/*": [
+        "src/renderer/src/*"
+      ] // Map '@/*' to renderer source (alias).
     }
   }
 }

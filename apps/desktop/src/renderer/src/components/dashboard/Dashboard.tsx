@@ -1,30 +1,34 @@
 import { useEffect, useState } from "react";
 import { FileText, ExternalLink, Calendar } from "lucide-react";
 
+// Interface for Application records fetched from the database.
 interface Application {
   id: string;
   jobTitle: string;
   companyName: string;
   jobUrl: string;
   coverLetter: string;
-  status: string;
+  status: string; // e.g. 'submitted', 'skipped'
   matchScore?: number;
   appliedAt: string;
 }
 
+// Dashboard component to view application history.
 export function Dashboard({ onBack }: { onBack: () => void }) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Filter state for viewing applied vs skipped jobs.
   const [currentTab, setCurrentTab] = useState<"applied" | "skipped">(
     "applied",
   );
 
+  // Fetch applications on mount.
   useEffect(() => {
     const fetchApps = async () => {
       try {
-        // @ts-ignore
+        // @ts-ignore window.api exposed via preload
         const apps = await window.api.getApplications();
         setApplications(apps);
       } catch (error) {
@@ -36,6 +40,7 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
     fetchApps();
   }, []);
 
+  // Filter applications based on current tab.
   const filteredApps = applications.filter((app) => {
     if (currentTab === "applied") return app.status !== "skipped";
     return app.status === "skipped";
@@ -52,6 +57,7 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
         </button>
       </div>
 
+      {/* Tabs for Applied vs Skipped */}
       <div className="flex space-x-2 border-b pb-2 mb-4">
         <button
           onClick={() => setCurrentTab("applied")}
@@ -75,6 +81,7 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
         </button>
       </div>
 
+      {/* List of Applications */}
       {filteredApps.length === 0 ? (
         <p className="text-muted-foreground text-center py-8">
           No {currentTab} applications found.
@@ -98,6 +105,7 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
                     </span>
                   </div>
                 </div>
+                {/* Status Badge */}
                 <div
                   className={`text-xs px-2 py-1 rounded-full ${
                     app.status === "submitted"
@@ -111,12 +119,14 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
 
+              {/* Match Score Display */}
               {app.matchScore && (
                 <div className="text-xs text-muted-foreground mt-1">
                   Match Score: {app.matchScore.toFixed(0)}%
                 </div>
               )}
 
+              {/* Actions: View Job Link and Toggle Details */}
               <div className="mt-2 flex gap-2">
                 <a
                   href={app.jobUrl}
@@ -143,6 +153,7 @@ export function Dashboard({ onBack }: { onBack: () => void }) {
                 </button>
               </div>
 
+              {/* Expanded Details (Cover Letter or Skip Reason) */}
               {expandedId === app.id && (
                 <div className="mt-3 p-3 bg-muted/50 rounded text-xs whitespace-pre-wrap font-mono border">
                   {app.status === "skipped" && (

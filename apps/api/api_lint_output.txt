@@ -1,0 +1,25 @@
+
+> api@0.0.0 lint
+> eslint .
+
+
+C:\Users\acer\Desktop\mini-tsenta\apps\api\adonisrc.ts
+  65:34  error  Insert `,`  prettier/prettier
+
+C:\Users\acer\Desktop\mini-tsenta\apps\api\scripts\truncate_embeddings.ts
+  1:30  error  Replace `'@prisma/client'` with `"@prisma/client"`                                      prettier/prettier
+  8:15  error  Replace `'Truncated·JobTextEmbedding·table'` with `"Truncated·JobTextEmbedding·table"`  prettier/prettier
+
+C:\Users\acer\Desktop\mini-tsenta\apps\api\tests\functional\isolation.spec.ts
+  41:11  error  Variable name `foundA_again` must match one of the following formats: camelCase, UPPER_CASE, PascalCase  @typescript-eslint/naming-convention
+
+✖ 4 problems (4 errors, 0 warnings)
+  3 errors and 0 warnings potentially fixable with the `--fix` option.
+
+npm error Lifecycle script `lint` failed with error:
+npm error code 1
+npm error path C:\Users\acer\Desktop\mini-tsenta\apps\api
+npm error workspace api@0.0.0
+npm error location C:\Users\acer\Desktop\mini-tsenta\apps\api
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c eslint .
